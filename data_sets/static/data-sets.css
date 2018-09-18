@@ -1,0 +1,194 @@
+#columns-list label {
+    font-weight: normal;
+    cursor: pointer;
+    white-space: nowrap;
+    display: block;
+}
+
+#query-details div {
+    margin-top:10px;
+}
+
+#preview td > ul  {
+    padding: 0px;
+    margin: 0px;
+}
+
+#preview td > ul > li {
+    list-style-position: inside;
+    white-space: nowrap;
+    /*display: inline-block;*/
+}
+
+#preview td span.preview-value {
+    cursor: pointer;
+    position: relative;
+}
+
+#preview td span.preview-value {
+    cursor: pointer;
+    position: relative;
+}
+
+#preview td span.preview-value:hover .hover-controls {
+    display: block;
+}
+
+#preview td span.preview-value > .hover-controls {
+    background-color: white;
+    opacity: 0.9;
+    position:absolute;
+    left:-2px;
+    bottom: auto;
+    display: none;
+    padding: 2px;
+    padding-left:5px;
+    padding-right:5px;
+    z-index: 100;
+    border: 0.5px solid #ddd;
+    border-radius: 3px;
+    transform: translateY(-2px);
+}
+
+#preview td span.preview-value > .hover-controls > a {
+    display:block;
+    white-space: nowrap;
+}
+
+#filter-card > div.card-block > div.card-block-content {
+    overflow-x: visible !important;
+    overflow-y: visible !important;
+
+}
+
+
+#filters table tr > td:last-child {
+    text-align: right;
+}
+
+
+#filters table {
+    margin-bottom: 0px;
+    width: 100%;
+}
+
+#filters td {
+    vertical-align: middle;
+}
+
+
+#filters td.filter-controls {
+    position: relative;
+}
+
+#filters td > div {
+    display: flex;
+    align-items: baseline;
+}
+
+#filters input {
+    min-width: 0;
+    width: auto;
+    display: inline;
+    border: none;
+    color: #428bca;
+}
+
+#filters select {
+    margin-left:15px;
+    border: none;
+    color: #428bca;
+    background-color: white;
+    -webkit-appearance:none;
+    -moz-appearance: none;
+
+}
+
+#filters input[type=date] {
+    width:140px;
+}
+
+#filters input::-webkit-outer-spin-button,
+#filters input::-webkit-inner-spin-button {
+    -webkit-appearance: none; !important;
+    margin: 0; !important;
+}
+
+
+#filters .bootstrap-tagsinput {
+    border: none;
+    box-shadow: none;
+    min-width: 0;
+    width: auto;
+    display: inline;
+}
+
+#filters .bootstrap-tagsinput span.badge {
+    background-color: white;
+    color: #428bca;
+    border: none;
+    padding: 0px;
+    font-size: inherit;
+    font-weight: inherit;
+    position:relative;
+    margin-right:20px;
+}
+
+#filters .bootstrap-tagsinput span.badge > span {
+    position: absolute;
+    right: -15px;
+    top: -10px;
+}
+
+#filters .bootstrap-tagsinput span.badge > span::after {
+    background-color: white;
+}
+
+
+div.chart-container {
+    width:100%;
+    height:14vw;
+}
+
+.dropdown-item {
+    cursor: pointer;
+}
+
+/** for typeahead */
+.tt-menu {
+    top: 100%;
+    left: 0;
+    z-index: 1000;
+    display: none;
+    float: left;
+    min-width: 160px;
+    padding: 5px 0;
+    margin: 2px 0 0;
+    list-style: none;
+    font-size: 14px;
+    background-color: #ffffff;
+    border: 1px solid #cccccc;
+    border-radius: 4px;
+    -webkit-box-shadow: 0 6px 12px rgba(0, 0, 0, 0.175);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.175);
+    background-clip: padding-box;
+    cursor: pointer;
+}
+
+.tt-suggestion {
+    display: block;
+    padding: 3px 20px;
+    clear: both;
+    font-weight: normal;
+    line-height: 1.428571429;
+    color: #333333;
+    white-space: nowrap;
+}
+
+.tt-suggestion:hover,
+.tt-suggestion:focus {
+    text-decoration: none;
+    outline: 0;
+    background-color: #f8f8f8;
+}
+
