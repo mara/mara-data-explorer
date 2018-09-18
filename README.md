@@ -2,6 +2,7 @@
 
 A minimal Flask based UI for providing raw data access to analysts, data scientists and power users of a data warehouse. Allows segmentations based on single columns of a flat table with quick data exploration, distribution charts and CSV downloads.
 
+&bnsp;
 
 ## Visualizing fact tables
 
@@ -35,12 +36,13 @@ example_project_dwh=#  select * from gh_dim.repo_activity_data_set order by rand
 
 This is that table viewed through the data sets UI:
 
-!p[Data sets ui](docs/data-sets-ui.png)
+![Data sets ui](docs/data-sets-ui.png)
 
 In the top right panel, arbitrary filters on date, text and numeric columns can be defined and their individual selectivity on the whole data set is shown. In the preview panel below, users can browse through individual rows. Output columns can be selected in the panel on the left, sorting is done by clicking on column headers, and individual cell values can be clicked for filtering the data set. Below the preview panel, the distributions of the selected columns across the data set and considering the current filters is shown.  
 
 Combinations of filters can be saved as a query for later reference. And queries can be downloaded to CSV for further processing in any other tool.
 
+&nbsp;
 
 ## Integrating and configuring data sets
 
