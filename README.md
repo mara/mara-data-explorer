@@ -2,7 +2,7 @@
 
 A minimal Flask based UI for providing raw data access to analysts, data scientists and power users of a data warehouse. Allows segmentations based on single columns of a flat table with quick data exploration, distribution charts and CSV downloads.
 
-&bnsp;
+&nbsp;
 
 ## Visualizing fact tables
 
