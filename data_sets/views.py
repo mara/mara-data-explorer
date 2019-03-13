@@ -3,7 +3,6 @@ import datetime
 import json
 
 import flask
-
 from data_sets import config
 from data_sets.data_set import find_data_set, Column
 from data_sets.query import Query, delete_query, list_queries
@@ -183,6 +182,8 @@ def _render_preview_row(query, row):
             values.append('')
         elif query.data_set.columns[query.column_names[pos]].type == 'text[]':
             values.append(_.ul[[_.li[_.span(class_='preview-value')[str(array_element)]] for array_element in value]])
+        elif query.data_set.columns[query.column_names[pos]].type == 'json':
+            values.append(_.pre(class_='preview-value')[flask.escape(json.dumps(value, indent=2))])
         else:
             values.append(_.span(class_='preview-value')[str(value)])
     return _.tr[[_.td[value] for value in values]]
