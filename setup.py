@@ -12,8 +12,6 @@ setup(
     ],
 
     dependency_links=[
-        'git+ssh://git@github.com/mara/mara-db.git@3.2.0#egg=mara-db',
-        'git+ssh://git@github.com/mara/mara-page.git@1.3.0#egg=mara-page'
     ],
 
     packages=find_packages(),
