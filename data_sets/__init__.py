@@ -1,15 +1,31 @@
-from data_sets import views, config, query
-
-MARA_CONFIG_MODULES = [config]
-
-MARA_FLASK_BLUEPRINTS = [views.blueprint]
-
-MARA_AUTOMIGRATE_SQLALCHEMY_MODELS = [query.Query]
-
-MARA_ACL_RESOURCES = [views.acl_resource, views.personal_data_acl_resource]
-
-MARA_CLICK_COMMANDS = []
-
-MARA_NAVIGATION_ENTRY_FNS = [views.navigation_entry]
+"""Make the functionalities of this package auto-discoverable by mara-app"""
 
 
+def MARA_CONFIG_MODULES():
+    from . import config
+    return [config]
+
+
+def MARA_FLASK_BLUEPRINTS():
+    from . import views
+    return [views.blueprint]
+
+
+def MARA_AUTOMIGRATE_SQLALCHEMY_MODELS():
+    from . import query
+    return [query.Query]
+
+
+def MARA_ACL_RESOURCES():
+    from . import views
+    return {'Data Sets': views.acl_resource,
+            'Personal Data': views.personal_data_acl_resource}
+
+
+def MARA_CLICK_COMMANDS():
+    return []
+
+
+def MARA_NAVIGATION_ENTRIES():
+    from . import views
+    return {'Data Sets': views.navigation_entry()}
