@@ -3,10 +3,9 @@ import datetime
 import json
 
 import flask
-from data_sets import config
-from data_sets.data_set import find_data_set, Column
-from data_sets.query import Query, delete_query, list_queries
+
 from mara_page import acl, navigation, response, bootstrap, _, html
+from . import config
 
 blueprint = flask.Blueprint('data_sets', __name__, static_folder='static',
                             url_prefix='/data-sets', template_folder='templates')
@@ -26,7 +25,7 @@ def _create_acl_resource_for_each_data_set():
 
 def navigation_entry():
     return navigation.NavigationEntry(
-        label='Data sets', uri_fn=lambda: flask.url_for('data_sets.index_page'), icon='table',
+        label='Data Sets', uri_fn=lambda: flask.url_for('data_sets.index_page'), icon='table',
         description='Raw data access & segmentation',
         children=[navigation.NavigationEntry(label='Overview', icon='list',
                                              uri_fn=lambda: flask.url_for('data_sets.index_page'))]
@@ -51,6 +50,7 @@ def index_page():
 @blueprint.route('/<data_set_id>', defaults={'query_id': None})
 @blueprint.route('/<data_set_id>/<query_id>')
 def data_set_page(data_set_id, query_id):
+    from .data_set import find_data_set
     ds = find_data_set(data_set_id)
     if not ds:
         flask.flash(f'Data set "{data_set_id}" does not exist anymore', category='danger')
@@ -98,7 +98,8 @@ def data_set_page(data_set_id, query_id):
 var dataSetPage = null;                  
 document.addEventListener('DOMContentLoaded', function() {{
     dataSetPage = DataSetPage('{flask.url_for('data_sets.index_page')}', 
-                              {json.dumps({'data_set_id': data_set_id, 'query_id': query_id, 'query': flask.request.get_json()})},
+                              {json.dumps(
+            {'data_set_id': data_set_id, 'query_id': query_id, 'query': flask.request.get_json()})},
                               15, '{config.charts_color()}');
 }});
             """],
@@ -154,6 +155,8 @@ document.addEventListener('DOMContentLoaded', function() {{
 
 @blueprint.route('/.initialize', methods=['POST'])
 def initialize_query():
+    from .query import Query
+
     data_set_id = flask.request.json['data_set_id']
     query_id = flask.request.json['query_id']
     query_dict = flask.request.json['query']
@@ -191,6 +194,8 @@ def _render_preview_row(query, row):
 
 @blueprint.route('/<data_set_id>/.preview')
 def data_set_preview(data_set_id):
+    from .query import Query
+
     query = Query(data_set_id=data_set_id)
     if not current_user_has_permission(query):
         return acl.inline_permission_denied_message()
@@ -208,6 +213,9 @@ def data_set_preview(data_set_id):
 
 @blueprint.route('/.preview', methods=['POST'])
 def preview():
+    from .query import Query
+    from .data_set import Column
+
     query = Query.from_dict(flask.request.json['query'])
 
     def header(column: Column):
@@ -237,6 +245,8 @@ def preview():
 
 @blueprint.route('/.row-count', methods=['POST'])
 def row_count():
+    from .query import Query
+
     query = Query.from_dict(flask.request.json)
 
     if current_user_has_permission(query):
@@ -247,6 +257,8 @@ def row_count():
 
 @blueprint.route('/.filter-row-count-<int:filter_pos>', methods=['POST'])
 def filter_row_count(filter_pos):
+    from .query import Query
+
     query = Query.from_dict(flask.request.json)
 
     if current_user_has_permission(query):
@@ -257,6 +269,7 @@ def filter_row_count(filter_pos):
 
 @blueprint.route('/.auto-complete')
 def auto_complete():
+    from .data_set import find_data_set
     ds = find_data_set(flask.request.args['data-set-id'])
     column_name = flask.request.args['column-name']
     if not acl.current_user_has_permission(data_set_acl_resources[ds.id]):
@@ -270,6 +283,8 @@ def auto_complete():
 
 @blueprint.route('/.download-csv', methods=['POST'])
 def download_csv():
+    from .query import Query
+
     query = Query.from_dict(json.loads(flask.request.form['query']))
     if not current_user_has_permission(query):
         return flask.abort(403, 'Not enough permissions to download this data set')
@@ -286,6 +301,8 @@ def download_csv():
 
 @blueprint.route('/.distribution-chart-<int:pos>', methods=['POST'])
 def distribution_chart(pos: int):
+    from .query import Query
+
     query = Query.from_dict(flask.request.json)
     column = list(query.data_set.columns.values())[pos]
     if not current_user_has_permission(query):
@@ -312,6 +329,8 @@ def distribution_chart(pos: int):
 
 @blueprint.route('/.save', methods=['POST'])
 def save():
+    from .query import Query
+
     query = Query.from_dict(flask.request.json)
     if current_user_has_permission(query):
         query.save()
@@ -324,6 +343,8 @@ def save():
 
 @blueprint.route('/<data_set_id>/.query-list')
 def query_list(data_set_id):
+    from .query import list_queries
+
     queries = list_queries(data_set_id)
     if queries:
         return str(bootstrap.table(
@@ -339,6 +360,8 @@ def query_list(data_set_id):
 
 @blueprint.route('/<data_set_id>/<query_id>/.delete')
 def _delete_query(data_set_id, query_id):
+    from .query import delete_query
+
     if not acl.current_user_has_permission(data_set_acl_resources[data_set_id]):
         flask.flash(f'Not enough permissions to delete queries from "{data_set_id}"', 'danger')
     else:
@@ -348,6 +371,6 @@ def _delete_query(data_set_id, query_id):
     return flask.redirect(flask.url_for('data_sets.data_set_page', data_set_id=data_set_id))
 
 
-def current_user_has_permission(query: Query) -> bool:
+def current_user_has_permission(query: 'Query') -> bool:
     """Checks whether the current user has permissions to query the data set"""
     return acl.current_user_has_permission(data_set_acl_resources[query.data_set.id])
