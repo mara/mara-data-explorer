@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded', function() {{
                       ]
                   ]
               ],
-              _.form(action=flask.url_for('data_sets.download_csv'), method='post')[
+              _.form(action=flask.url_for('data_sets.download_csv', data_set_id=data_set_id), method='post')[
                   _.div(class_="modal fade", id="download-csv-dialog", tabindex="-1")[
                       _.div(class_="modal-dialog", role='document')[
                           _.div(class_="modal-content")[
@@ -281,8 +281,8 @@ def auto_complete():
         return flask.jsonify(ds.autocomplete_text_column(column_name, flask.request.args['term']))
 
 
-@blueprint.route('/.download-csv', methods=['POST'])
-def download_csv():
+@blueprint.route('/<data_set_id>/.download-csv', methods=['POST'])
+def download_csv(data_set_id):
     from .query import Query
 
     query = Query.from_dict(json.loads(flask.request.form['query']))
