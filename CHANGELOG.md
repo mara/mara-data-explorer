@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.0.1
+Include data_set_id to download_csv endpoint in order to know from which data set is coming from
+
 ## 2.0.0
 
 - Change MARA_XXX variables to functions to delay importing of imports
