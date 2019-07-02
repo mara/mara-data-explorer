@@ -81,7 +81,7 @@ ORDER BY attnum""", (self.database_table, self.database_schema))
                 for column_name, column_type in cursor.fetchall():
                     if column_type in ['character varying', 'text']:
                         type = 'text'
-                    elif column_type in ['integer', 'real', 'smallint', 'double precision']:
+                    elif column_type in ['bigint', 'integer', 'real', 'smallint', 'double precision']:
                         type = 'number'
                     elif column_type in ['timestamp', 'timestamp with time zone', 'date']:
                         type = 'date'
