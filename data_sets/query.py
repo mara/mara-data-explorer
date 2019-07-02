@@ -49,9 +49,9 @@ class Query(Base):
     sort_order = sqlalchemy.Column(sqlalchemy.TEXT)
     filters = sqlalchemy.Column(sqlalchemy.JSON)
 
-    created_at = sqlalchemy.Column(sqlalchemy.TIMESTAMP, nullable=False)
+    created_at = sqlalchemy.Column(sqlalchemy.TIMESTAMP(timezone=True), nullable=False)
     created_by = sqlalchemy.Column(sqlalchemy.TEXT, nullable=False)
-    updated_at = sqlalchemy.Column(sqlalchemy.TIMESTAMP, nullable=False)
+    updated_at = sqlalchemy.Column(sqlalchemy.TIMESTAMP(timezone=True), nullable=False)
     updated_by = sqlalchemy.Column(sqlalchemy.TEXT, nullable=False)
 
     def __init__(self, data_set_id: str, query_id: str = None, column_names: [str] = None,
