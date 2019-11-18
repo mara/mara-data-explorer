@@ -1,5 +1,9 @@
 # Changelog
 
+
+## 2.1.1
+Include button to display data set query
+
 ## 2.1.0 (2019-07-02)
 - Changed all `TIMESTAMP` to `TIMESTAMPTZ` in the mara tables. You have to manually run the
   below migration commands as `make migrate-mara-db` won't pick up this change.
