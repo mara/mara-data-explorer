@@ -3,8 +3,8 @@ import datetime
 import json
 
 import flask
-
 from mara_page import acl, navigation, response, bootstrap, _, html
+
 from . import config
 
 blueprint = flask.Blueprint('data_sets', __name__, static_folder='static',
@@ -61,7 +61,9 @@ def data_set_page(data_set_id, query_id):
                       response.ActionButton(action='javascript:dataSetPage.load()', icon='folder-open',
                                             label='Load', title='Load previously saved query'),
                       response.ActionButton(action='javascript:dataSetPage.save()', icon='save',
-                                            label='Save', title='Save query')]
+                                            label='Save', title='Save query'),
+                      response.ActionButton(action='javascript:dataSetPage.displayQuery()', icon='code',
+                                            label='Display Query', title='Display query')]
 
     if query_id:
         action_buttons.insert(1, response.ActionButton(
@@ -116,6 +118,18 @@ document.addEventListener('DOMContentLoaded', function() {{
                                           'aria-label': "Close"})[
                                   _.span(**{'aria-hidden': 'true'})['&times']]],
                           _.div(class_='modal-body', id='query-list')['']
+                      ]
+                  ]
+              ],
+              _.div(class_='modal fade', id='display-query-dialog', tabindex="-1")[
+                  _.div(class_='modal-dialog', role='document')[
+                      _.div(class_='modal-content')[
+                          _.div(class_='modal-header')[
+                              _.h5(class_='modal-title')['Display query'],
+                              _.button(**{'type': "button", 'class': "close", 'data-dismiss': "modal",
+                                          'aria-label': "Close"})[
+                                  _.span(**{'aria-hidden': 'true'})['&times']]],
+                          _.div(class_='modal-body', id='query-display')['']
                       ]
                   ]
               ],
@@ -356,6 +370,23 @@ def query_list(data_set_id):
                        _.td[row[2]]] for row in queries]))
     else:
         return 'No queries saved yet'
+
+
+@blueprint.route('/.query-display', methods=['POST'])
+def query_display():
+    from .query import Query
+
+    query = Query.from_dict(flask.request.json)
+
+    query_statement = query.to_sql()
+
+    if query_statement:
+        return str(bootstrap.table(
+            headers=['Query Statement'],
+            rows=[_.tr[_.td[query_statement]]]
+        ))
+    else:
+        return 'Can not display query statement.'
 
 
 @blueprint.route('/<data_set_id>/<query_id>/.delete')

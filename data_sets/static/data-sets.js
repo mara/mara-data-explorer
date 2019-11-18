@@ -724,10 +724,30 @@ function DataSetPage(baseUrl, args, pageSize, chartColor) {
         });
     }
 
+    /** display a query */
+    function displayQuery() {
+        $('#display-query-dialog').modal();
+        $('#query-display').empty().append(spinner());
+
+        $.ajax({
+            type: "POST",
+            url: baseUrl + '/.query-display',
+            contentType: "application/json; charset=utf-8",
+            data: JSON.stringify(query),
+            success: function (data) {
+                $('#query-display').empty().append(data).fadeIn(300);
+            },
+            error: function () {
+                showAlert('Could not display query', 'danger');
+            }
+        });
+    }
+
     // make some function externally available (mainly for use in action buttons)
     return {
         'save': save,
         'load': load,
-        'downloadCSV': downloadCSV
+        'downloadCSV': downloadCSV,
+        'displayQuery': displayQuery
     };
 }
