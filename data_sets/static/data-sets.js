@@ -739,7 +739,7 @@ function DataSetPage(baseUrl, args, pageSize, chartColor) {
 
         $.ajax({
             type: "POST",
-            url: baseUrl + '/.query-display',
+            url: baseUrl + '/.display-query',
             contentType: "application/json; charset=utf-8",
             data: JSON.stringify(query),
             success: function (data) {

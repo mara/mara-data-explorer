@@ -62,8 +62,8 @@ def data_set_page(data_set_id, query_id):
                                             label='Load', title='Load previously saved query'),
                       response.ActionButton(action='javascript:dataSetPage.save()', icon='save',
                                             label='Save', title='Save query'),
-                      response.ActionButton(action='javascript:dataSetPage.displayQuery()', icon='code',
-                                            label='Display Query', title='Display query')]
+                      response.ActionButton(action='javascript:dataSetPage.displayQuery()', icon='eye',
+                                            label='Display query', title='Display query')]
 
     if query_id:
         action_buttons.insert(1, response.ActionButton(
@@ -125,7 +125,7 @@ document.addEventListener('DOMContentLoaded', function() {{
                   _.div(class_='modal-dialog', role='document')[
                       _.div(class_='modal-content')[
                           _.div(class_='modal-header')[
-                              _.h5(class_='modal-title')['Display query'],
+                              _.h5(class_='modal-title')['Query statement'],
                               _.button(**{'type': "button", 'class': "close", 'data-dismiss': "modal",
                                           'aria-label': "Close"})[
                                   _.span(**{'aria-hidden': 'true'})['&times']]],
@@ -214,8 +214,8 @@ def data_set_preview(data_set_id):
     if query.column_names:
         if current_user_has_permission(query):
             rows = [_render_preview_row(query, row) for row
-                in query.run(limit=7, offset=0,
-                             include_personal_data=acl.current_user_has_permission(personal_data_acl_resource))]
+                    in query.run(limit=7, offset=0,
+                                 include_personal_data=acl.current_user_has_permission(personal_data_acl_resource))]
         else:
             rows = _.tr[_.td(colspan=len(query.column_names))[acl.inline_permission_denied_message()]]
 
@@ -373,8 +373,8 @@ def query_list(data_set_id):
         return 'No queries saved yet'
 
 
-@blueprint.route('/.query-display', methods=['POST'])
-def query_display():
+@blueprint.route('/.display-query', methods=['POST'])
+def display_query():
     from .query import Query
 
     query = Query.from_dict(flask.request.json)
@@ -382,10 +382,7 @@ def query_display():
     query_statement = query.to_sql()
 
     if query_statement:
-        return str(bootstrap.table(
-            headers=['Query Statement'],
-            rows=[_.tr[_.td[query_statement]]]
-        ))
+        return str(_.tt[html.highlight_syntax(query_statement, language='sql')])
     else:
         return 'Can not display query statement.'
 
