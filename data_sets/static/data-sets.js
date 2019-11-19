@@ -120,14 +120,22 @@ function DataSetPage(baseUrl, args, pageSize, chartColor) {
         }
     }
 
+    var allTargets = [$('#columns-list'), $('#preview'), $('#filters'), $('#row-counts'), $('#pagination'), $('#query-details')];
 
     // get query object from server and initialize ui
     enqueueRequest(
         baseUrl + '/.initialize', args,
-        [$('#columns-list'), $('#preview'), $('#filters'), $('#row-counts'), $('#pagination'), $('#query-details')],
+        allTargets,
         function (data) {
             query = data.query;
             allColumns = data.all_columns;
+
+            if (query.column_names.length == 0) {
+                allTargets.forEach(function (target) {
+                    target.html('∅');
+                });
+                return;
+            };
             columnTypesByColumnName = {};
             allColumns.forEach(function (column, i) {
                 columnTypesByColumnName[column.column_name] = column.type;

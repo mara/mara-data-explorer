@@ -129,9 +129,12 @@ LIMIT 50""", (f'%{term}%',))
 
     def row_count(self):
         """Compute the total number of rows of the data set"""
-        with mara_db.postgresql.postgres_cursor_context(self.database_alias) as cursor:
-            cursor.execute(f'SELECT count(*) FROM {self.database_schema}.{self.database_table}')
-            return cursor.fetchone()[0]
+        if self.columns:
+            with mara_db.postgresql.postgres_cursor_context(self.database_alias) as cursor:
+                cursor.execute(f'SELECT count(*) FROM {self.database_schema}.{self.database_table}')
+                return cursor.fetchone()[0]
+        else:
+            return 0
 
     def __repr__(self):
         return f'<DataSet "{self.name}">'

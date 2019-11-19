@@ -101,6 +101,8 @@ class Query(Base):
 
         Returns: An array of values
         """
+        if not self.column_names: # table probably does not exists or no columns are selected
+            return []
         with mara_db.postgresql.postgres_cursor_context(self.data_set.database_alias) as cursor:
             cursor.execute(self.to_sql(limit=limit, offset=offset, include_personal_data=include_personal_data))
             return cursor.fetchall()
