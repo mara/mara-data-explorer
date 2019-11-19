@@ -120,15 +120,15 @@ class Query(Base):
 
 
             sql = f"""
-SELECT """ + ','.join(columns) + f"""
+SELECT """ + ',\n       '.join(columns) + f"""
 FROM {self.data_set.database_schema}.{self.data_set.database_table}
 """ + self.filters_to_sql()
             if self.sort_order and self.sort_column_name:
-                sql += f'ORDER BY "{self.sort_column_name}" {self.sort_order} NULLS LAST\n';
+                sql += f'\nORDER BY "{self.sort_column_name}" {self.sort_order} NULLS LAST\n';
 
             if limit != None and offset != None:
-                sql += f'LIMIT {int(limit)}\n'
-                sql += f'OFFSET {int(offset)}\n'
+                sql += f'\nLIMIT {int(limit)}\n'
+                sql += f'\nOFFSET {int(offset)}\n'
 
             return sql
         else:
@@ -137,7 +137,7 @@ FROM {self.data_set.database_schema}.{self.data_set.database_table}
     def filters_to_sql(self) -> str:
         """Renders a SQL WHERE condition for the query"""
         if self.filters:
-            return 'WHERE ' + ' AND '.join([self.filter_to_sql(filter) for filter in self.filters]) + '\n'
+            return 'WHERE ' + '\n  AND '.join([self.filter_to_sql(filter) for filter in self.filters]) + '\n'
         else:
             return ''
 
