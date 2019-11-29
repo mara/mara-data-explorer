@@ -1,7 +1,10 @@
 # Changelog
 
-## 2.1.1 (2019-07-18)
-* Add numeric as a valid type in a data set
+
+## 2.1.1
+- Include button to display data set query
+- Add numeric as a valid type in a data set
+
 
 ## 2.1.0 (2019-07-02)
 - Changed all `TIMESTAMP` to `TIMESTAMPTZ` in the mara tables. You have to manually run the
