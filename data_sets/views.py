@@ -197,18 +197,19 @@ def data_set_preview(data_set_id):
     from .query import Query
 
     query = Query(data_set_id=data_set_id)
-    if not current_user_has_permission(query):
-        return acl.inline_permission_denied_message()
-    else:
+    if query.column_names:
         if current_user_has_permission(query):
             rows = [_render_preview_row(query, row) for row
-                    in query.run(limit=7, offset=0,
-                                 include_personal_data=acl.current_user_has_permission(personal_data_acl_resource))]
+                in query.run(limit=7, offset=0,
+                             include_personal_data=acl.current_user_has_permission(personal_data_acl_resource))]
         else:
             rows = _.tr[_.td(colspan=len(query.column_names))[acl.inline_permission_denied_message()]]
 
         return str(
             bootstrap.table(headers=[flask.escape(column_name) for column_name in query.column_names], rows=rows))
+
+    else:
+        return '∅'
 
 
 @blueprint.route('/.preview', methods=['POST'])
