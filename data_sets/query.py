@@ -121,7 +121,7 @@ class Query(Base):
 
             sql = f"""
 SELECT """ + ',\n       '.join(columns) + f"""
-FROM {self.data_set.database_schema}.{self.data_set.database_table}
+FROM "{self.data_set.database_schema}"."{self.data_set.database_table}"
 """ + self.filters_to_sql()
             if self.sort_order and self.sort_column_name:
                 sql += f'\nORDER BY "{self.sort_column_name}" {self.sort_order} NULLS LAST\n';
@@ -167,13 +167,13 @@ FROM {self.data_set.database_schema}.{self.data_set.database_table}
     def row_count(self):
         """Compute how many rows will be returned by the current set of filters"""
         with mara_db.postgresql.postgres_cursor_context(self.data_set.database_alias) as cursor:
-            cursor.execute(f'SELECT count(*) FROM {self.data_set.database_schema}.{self.data_set.database_table} '
+            cursor.execute(f'SELECT count(*) FROM "{self.data_set.database_schema}"."{self.data_set.database_table}" '
                            + self.filters_to_sql())
             return cursor.fetchone()[0]
 
     def filter_row_count(self, filter_pos):
         with mara_db.postgresql.postgres_cursor_context(self.data_set.database_alias) as cursor:
-            cursor.execute(f'SELECT count(*) FROM {self.data_set.database_schema}.{self.data_set.database_table} WHERE '
+            cursor.execute(f'SELECT count(*) FROM "{self.data_set.database_schema}"."{self.data_set.database_table}" WHERE '
                            + self.filter_to_sql(self.filters[filter_pos]))
             return cursor.fetchone()[0]
 
@@ -188,7 +188,7 @@ FROM {self.data_set.database_schema}.{self.data_set.database_table}
     def _query_cte_for_distribution_queries(self, column_name):
         return f'''
 query AS (SELECT "{column_name}" AS value
-          FROM {self.data_set.database_schema}.{self.data_set.database_table}
+          FROM "{self.data_set.database_schema}"."{self.data_set.database_table}"
           WHERE "{column_name}" IS NOT NULL 
                 {('AND ' + ' AND '.join([self.filter_to_sql(filter) for filter in self.filters])) if self.filters else ''}),
 '''

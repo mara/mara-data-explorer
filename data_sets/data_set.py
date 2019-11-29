@@ -101,7 +101,7 @@ ORDER BY attnum""", (self.database_table, self.database_schema))
             if self.columns[column_name].type == 'text[]':
                 cursor.execute(f"""
 SELECT f
-FROM (SELECT DISTINCT unnest("{column_name}") AS f FROM {self.database_schema}.{self.database_table}) t
+FROM (SELECT DISTINCT unnest("{column_name}") AS f FROM "{self.database_schema}"."{self.database_table}") t
 WHERE f ilike %s
 ORDER BY f
 LIMIT 50""", (f'%{term}%',))
@@ -109,14 +109,14 @@ LIMIT 50""", (f'%{term}%',))
             elif self.use_attributes_table:
                 cursor.execute(f"""
 SELECT value 
-FROM {self.database_schema}.{self.database_table}_attributes 
+FROM "{self.database_schema}"."{self.database_table}_attributes" 
 WHERE attribute = %s AND value ilike %s 
 LIMIT 50""", (column_name, f'%{term}%'))
 
             else:
                 cursor.execute(f"""
 SELECT DISTINCT "{column_name}" 
-FROM {self.database_schema}.{self.database_table}
+FROM "{self.database_schema}"."{self.database_table}"
 WHERE "{column_name}" ILIKE %s AND "{column_name}" <> '' 
 ORDER BY "{column_name}"
 LIMIT 50""", (f'%{term}%',))
@@ -131,7 +131,7 @@ LIMIT 50""", (f'%{term}%',))
         """Compute the total number of rows of the data set"""
         if self.columns:
             with mara_db.postgresql.postgres_cursor_context(self.database_alias) as cursor:
-                cursor.execute(f'SELECT count(*) FROM {self.database_schema}.{self.database_table}')
+                cursor.execute(f'SELECT count(*) FROM "{self.database_schema}"."{self.database_table}"')
                 return cursor.fetchone()[0]
         else:
             return 0
