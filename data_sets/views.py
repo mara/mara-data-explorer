@@ -74,12 +74,12 @@ def data_set_page(data_set_id, query_id):
         title=f'Query "{query_id}" on "{ds.name}"' if query_id else f'New query on "{ds.name}"',
         html=[_.div(class_='row')[
                   _.div(class_='col-md-3')[
-                      bootstrap.card(header_left='Query', body=_.div(id='query-details')['']),
+                      bootstrap.card(header_left='Query', body=_.div(id='query-details')[html.spinner()]),
                       bootstrap.card(header_left='Columns',
                                      body=[_.div(class_="form-group")[
                                                _.input(type="search", class_="columns-search form-control",
                                                        value="", placeholder="Filter")],
-                                           _.div(id='columns-list')['']])],
+                                           _.div(id='columns-list')[html.spinner()]])],
                   _.div(class_='col-md-9')[
                       bootstrap.card(
                           id='filter-card',
@@ -91,10 +91,10 @@ def data_set_page(data_set_id, query_id):
                                                    _.input(type="text", class_="columns-search form-control", value="",
                                                            placeholder="Filter")]]]],
                           fixed_header_height=False,
-                          body=_.div(id='filters')['']),
-                      bootstrap.card(header_left=_.div(id='row-counts')[''],
-                                     header_right=_.div(id='pagination')[''],
-                                     body=_.div(id='preview')['']),
+                          body=_.div(id='filters')[html.spinner()]),
+                      bootstrap.card(header_left=_.div(id='row-counts')[html.spinner()],
+                                     header_right=_.div(id='pagination')[html.spinner()],
+                                     body=_.div(id='preview')[html.spinner()]),
                       _.div(class_='row', id='distribution-charts')['']
                   ]], _.script[f"""
 var dataSetPage = null;                  
