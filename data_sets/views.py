@@ -63,7 +63,7 @@ def data_set_page(data_set_id, query_id):
                       response.ActionButton(action='javascript:dataSetPage.save()', icon='save',
                                             label='Save', title='Save query'),
                       response.ActionButton(action='javascript:dataSetPage.displayQuery()', icon='eye',
-                                            label='Display query', title='Display query')]
+                                            label='SQL', title='Display query')]
 
     if query_id:
         action_buttons.insert(1, response.ActionButton(

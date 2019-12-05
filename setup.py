@@ -8,7 +8,8 @@ setup(
 
     install_requires=[
         'mara-db>=4.0.0',
-        'mara-page>=1.4.1'
+        'mara-page>=1.4.1',
+        'arrow'
     ],
 
     dependency_links=[

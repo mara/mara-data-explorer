@@ -649,11 +649,11 @@ function DataSetPage(baseUrl, args, pageSize, chartColor) {
             data.addColumn('number', '# ' + dataSetName);
             data.addColumn({type: 'string', role: 'tooltip', 'p': {'html': true}});
             rows.forEach(function (row, i) {
-                data.addRow([row[0], row[2], '<div style="padding:5px;white-space: nowrap">≥ ' + row[0]
+                data.addRow([row[0] + (row[1] - row[0]) / 2, row[2], '<div style="padding:5px;white-space: nowrap">≥ ' + row[0]
                 + '<br/>< ' + row[1] + '<br/><b>' + row[2] + '</b> ' + dataSetName + '</div>']);
             });
-            var chart = new google.visualization.LineChart(container);
-            chart.draw(data, chartOptions);
+            var chart = new google.visualization.ColumnChart(container);
+            chart.draw(data, Object.assign({}, chartOptions, {'bar': {'groupWidth': '100%'}}));
 
             google.visualization.events.addListener(chart, 'select', function () {
                 var selectedItem = chart.getSelection()[0];
@@ -680,11 +680,13 @@ function DataSetPage(baseUrl, args, pageSize, chartColor) {
             data.addColumn({type: 'string', role: 'tooltip', 'p': {'html': true}});
 
             rows.forEach(function (row, i) {
-                var min = new Date(row[0]);
-                var max = new Date(row[1]);
-                data.addRow([min, row[2],
-                    '<div style="padding:5px;white-space: nowrap">≥ ' + min.toJSON().slice(0, 10)
-                    + '<br/>< ' + max.toJSON().slice(0, 10) + '<br/><b>' + row[2] + '</b> ' + dataSetName + '</div>']);
+                var date = new Date(row[0]);
+                var n = row[2];
+                var caption = row[1];
+
+                data.addRow([date, n,
+                    '<div style="padding:5px;white-space: nowrap">' + caption
+                    + '<br/><b>' + n + '</b> ' + dataSetName + '</div>']);
             });
 
             var chart = new google.visualization.LineChart(container);

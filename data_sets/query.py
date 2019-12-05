@@ -4,6 +4,8 @@ import datetime
 import json
 import re
 import subprocess
+import math
+import decimal
 
 import sqlalchemy
 from data_sets.data_set import find_data_set
@@ -101,7 +103,7 @@ class Query(Base):
 
         Returns: An array of values
         """
-        if not self.column_names: # table probably does not exists or no columns are selected
+        if not self.column_names:  # table probably does not exists or no columns are selected
             return []
         with mara_db.postgresql.postgres_cursor_context(self.data_set.database_alias) as cursor:
             cursor.execute(self.to_sql(limit=limit, offset=offset, include_personal_data=include_personal_data))
@@ -117,7 +119,6 @@ class Query(Base):
                     columns.append(f'''REPLACE("{column_name}"::TEXT, '.', ',') AS "{column_name}"''')
                 else:
                     columns.append(f'"{column_name}"')
-
 
             sql = f"""
 SELECT """ + ',\n       '.join(columns) + f"""
@@ -153,7 +154,7 @@ FROM "{self.data_set.database_schema}"."{self.data_set.database_table}"
                        + ', '.join(f"'{value}'" for value in filter.value or ['']) + ')'
         elif type == 'text[]':
             clause = f'''"{filter.column_name}" && ARRAY[''' \
-                + ', '.join(f"'{value}'" for value in filter.value or ['']) + ']::TEXT[]'
+                     + ', '.join(f"'{value}'" for value in filter.value or ['']) + ']::TEXT[]'
             if filter.operator == '!=':
                 clause = ' not (' + clause + ')'
             return clause
@@ -173,105 +174,114 @@ FROM "{self.data_set.database_schema}"."{self.data_set.database_table}"
 
     def filter_row_count(self, filter_pos):
         with mara_db.postgresql.postgres_cursor_context(self.data_set.database_alias) as cursor:
-            cursor.execute(f'SELECT count(*) FROM "{self.data_set.database_schema}"."{self.data_set.database_table}" WHERE '
-                           + self.filter_to_sql(self.filters[filter_pos]))
+            cursor.execute(
+                f'SELECT count(*) FROM "{self.data_set.database_schema}"."{self.data_set.database_table}" WHERE '
+                + self.filter_to_sql(self.filters[filter_pos]))
             return cursor.fetchone()[0]
 
     def as_csv(self, delimiter, decimal_mark, include_personal_data):
         query = self.to_sql(decimal_mark=decimal_mark, include_personal_data=include_personal_data).replace('"', '\\"')
-        command = mara_db.shell.query_command(self.data_set.database_alias,echo_queries=False) \
+        command = mara_db.shell.query_command(self.data_set.database_alias, echo_queries=False) \
                   + f''' --command="COPY ({query}) TO STDOUT WITH DELIMITER E'{delimiter}' CSV HEADER;"'''
 
         return subprocess.check_output(command, shell=True)
 
-
-    def _query_cte_for_distribution_queries(self, column_name):
-        return f'''
-query AS (SELECT "{column_name}" AS value
-          FROM "{self.data_set.database_schema}"."{self.data_set.database_table}"
-          WHERE "{column_name}" IS NOT NULL 
-                {('AND ' + ' AND '.join([self.filter_to_sql(filter) for filter in self.filters])) if self.filters else ''}),
-'''
-
     def number_distribution(self, column_name):
         """Returns a frequency histogram for a number column"""
-        bucket_count = 50
         with mara_db.postgresql.postgres_cursor_context(self.data_set.database_alias) as cursor:
-            cursor.execute(f'''
-WITH
-{self._query_cte_for_distribution_queries(column_name)}
-                
-min_max AS (SELECT min(value) :: NUMERIC AS min,
-                   max(value) :: NUMERIC AS max
-            FROM query),
+            cursor.execute(f"""
+SELECT min("{column_name}") :: NUMERIC AS min_value,
+       max("{column_name}") :: NUMERIC AS max_value
+FROM "{self.data_set.database_schema}"."{self.data_set.database_table}"
+WHERE "{column_name}" IS NOT NULL
+      {('AND ' + ' AND '.join([self.filter_to_sql(filter) for filter in self.filters])) if self.filters else ''}
+""")
+            (min_value, max_value) = cursor.fetchone()
+            if min_value == None:
+                return []
 
-range AS (SELECT CASE WHEN min <> 0 OR max <> 0 THEN power(10, round(log(greatest(abs(min), abs(max)))-1.7)) ELSE 0 END AS base 
-          FROM min_max),
+            min_buckets = 5
 
-rounded_min_max AS (SELECT CASE WHEN min <> 0 THEN floor( min / base ) * base ELSE 0 END AS min,
-                    CASE WHEN max <> 0 THEN ceil( max / base ) * base ELSE 0 END AS max
-                    FROM min_max, range),
+            # find the highest magnitude of 10
+            exponent = math.ceil(max(abs(min_value).log10(), abs(max_value).log10()))
 
-stats AS (SELECT min, max,
-                 CASE WHEN min = max THEN 1 ELSE ((max - min) / {bucket_count}.0) :: NUMERIC END AS bucket_width
-          FROM rounded_min_max),
+            while True:
+                _10 = decimal.Decimal(10)
 
-buckets AS (SELECT i, min+i*bucket_width AS min, min+(i+1)*bucket_width AS max 
-            FROM stats, generate_series(0, ((max-min)/bucket_width)::INTEGER, 1) i),
+                # truncate to the next lower magnitude of 10
+                min_ = math.floor(min_value / pow(_10, exponent))
+                max_ = math.ceil(max_value / pow(_10, exponent))
 
-histogram AS (SELECT trunc((value-min)/bucket_width) AS bucket,
-                     count(*) AS count
-              FROM query, stats
-              GROUP BY 1)
-
-SELECT min::float, max::float, count
-FROM buckets
-LEFT JOIN histogram ON bucket = i
-ORDER BY i;''')
-            return cursor.fetchall()
+                if (max_ - min_) > min_buckets:
+                    # compute buckets (tuples of min and max values)
+                    cursor.execute(f"""
+SELECT width_bucket("{column_name}", {min_ * pow(_10, exponent)}, {max_ * pow(_10, exponent)}, {max_ - min_}) as bucket,
+      count(*) AS n
+FROM "{self.data_set.database_schema}"."{self.data_set.database_table}"
+WHERE "{column_name}" IS NOT NULL
+      {('AND ' + ' AND '.join([self.filter_to_sql(filter) for filter in self.filters])) if self.filters else ''}
+GROUP by bucket
+ORDER BY bucket
+""")
+                    return ([(float((min_ + bucket - 1) * pow(_10, exponent)),
+                              float((min_ + bucket) * pow(_10, exponent)),
+                              n) for bucket, n in cursor.fetchall()])
+                else:
+                    exponent += -1
 
     def date_distribution(self, column_name):
         """Returns a frequency histogram for a date column"""
-        bucket_count = 50
+
+        import arrow
+
         with mara_db.postgresql.postgres_cursor_context(self.data_set.database_alias) as cursor:
-            cursor.execute(f'''
-WITH
-{self._query_cte_for_distribution_queries(column_name)}
+            with mara_db.postgresql.postgres_cursor_context(self.data_set.database_alias) as cursor:
+                cursor.execute(f"""
+SELECT min("{column_name}") :: TIMESTAMPTZ AS min_value,
+       max("{column_name}") :: TIMESTAMPTZ AS max_value
+FROM "{self.data_set.database_schema}"."{self.data_set.database_table}"
+WHERE "{column_name}" IS NOT NULL
+      {('AND ' + ' AND '.join([self.filter_to_sql(filter) for filter in self.filters])) if self.filters else ''}
+""")
+                (min_value, max_value) = cursor.fetchone()
+                if min_value == None:
+                    return []
 
-stats AS (SELECT min(value::DATE)-current_date AS min,
-                 max(value::DATE)-current_date AS max,
-                 greatest(ceil((max(value::DATE) - min(value::DATE)) / {bucket_count}.0)::INTEGER, 1) AS bucket_width
-          FROM query),
+                resolutions = {'year': 'YYYY',
+                               'month': 'YYYY Mon',
+                               'week': 'IYYY "-" "CW "IW',
+                               'day': 'Dy, Mon DD YYYY'}
 
-buckets AS (SELECT trunc((d-min)/bucket_width) AS i, current_date+d AS min, current_date+d+bucket_width AS max
-            FROM stats, generate_series(min, max, bucket_width) d),
+                min_buckets = 5
 
-histogram AS (SELECT trunc((value::DATE - current_date-min)/bucket_width) AS bucket,
-                     count(*) AS count
-              FROM query, stats
-              GROUP BY 1)
+                for resolution in resolutions.keys():
+                    if len(list(arrow.Arrow.range(resolution, min_value, max_value))) >= min_buckets:
+                        break
 
-SELECT min, max, count
-       
-FROM buckets
-LEFT JOIN histogram ON bucket = i
-ORDER BY i''')
-            return cursor.fetchall()
+                # compute buckets (tuples of min and max values)
+                cursor.execute(f"""
+SELECT date_trunc('{resolution}', "{column_name}") as d,
+       to_char(date_trunc('{resolution}', "{column_name}"), '{resolutions[resolution]}'),
+       count(*) AS n
+FROM "{self.data_set.database_schema}"."{self.data_set.database_table}"
+WHERE "{column_name}" IS NOT NULL
+      {('AND ' + ' AND '.join([self.filter_to_sql(filter) for filter in self.filters])) if self.filters else ''}
+GROUP by d
+ORDER BY d
+""")
+                return cursor.fetchall()
 
     def text_distribution(self, column_name):
         """Returns the most frequent values and their counts for a column"""
         with mara_db.postgresql.postgres_cursor_context(self.data_set.database_alias) as cursor:
             cursor.execute(f'''
-WITH
-{self._query_cte_for_distribution_queries(column_name)}
-
-counts AS (SELECT value, count(*)
-           FROM query
-           GROUP BY value)
-
-SELECT value AS label, count
-FROM counts
-ORDER BY count DESC
+SELECT "{column_name}" AS value,
+       count(*) AS n
+FROM "{self.data_set.database_schema}"."{self.data_set.database_table}"
+WHERE "{column_name}" IS NOT NULL 
+      {('AND ' + ' AND '.join([self.filter_to_sql(filter) for filter in self.filters])) if self.filters else ''}
+GROUP BY value
+ORDER BY n DESC
 LIMIT 10''')
             return cursor.fetchall()
 
@@ -279,16 +289,13 @@ LIMIT 10''')
         """Returns the most frequent values and their counts for a text array column"""
         with mara_db.postgresql.postgres_cursor_context(self.data_set.database_alias) as cursor:
             cursor.execute(f'''
-WITH
-{self._query_cte_for_distribution_queries(column_name)}
-
-counts AS (SELECT value, count(*)
-           FROM (SELECT unnest(value) AS value FROM query) t
-           GROUP BY value)
-
-SELECT value AS label, count
-FROM counts
-ORDER BY count DESC
+SELECT unnest("{column_name}") AS value,
+       count(*) AS n
+FROM "{self.data_set.database_schema}"."{self.data_set.database_table}"
+WHERE "{column_name}" IS NOT NULL 
+      {('AND ' + ' AND '.join([self.filter_to_sql(filter) for filter in self.filters])) if self.filters else ''}
+GROUP BY value
+ORDER BY n DESC
 LIMIT 10''')
             return cursor.fetchall()
 
