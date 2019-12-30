@@ -191,12 +191,13 @@ FROM "{self.data_set.database_schema}"."{self.data_set.database_table}"
         with mara_db.postgresql.postgres_cursor_context(self.data_set.database_alias) as cursor:
             cursor.execute(f"""
 SELECT min("{column_name}") :: NUMERIC AS min_value,
-       max("{column_name}") :: NUMERIC AS max_value
+       max("{column_name}") :: NUMERIC AS max_value,
+       count(*)                        AS number_of_values
 FROM "{self.data_set.database_schema}"."{self.data_set.database_table}"
 WHERE "{column_name}" IS NOT NULL
       {('AND ' + ' AND '.join([self.filter_to_sql(filter) for filter in self.filters])) if self.filters else ''}
 """)
-            (min_value, max_value) = cursor.fetchone()
+            (min_value, max_value, number_of_values) = cursor.fetchone()
             if min_value == None:
                 return []
 
@@ -204,6 +205,11 @@ WHERE "{column_name}" IS NOT NULL
 
             # find the highest magnitude of 10
             exponent = math.ceil(max(abs(min_value).log10(), abs(max_value).log10()))
+
+            # when there is only a single value
+            if min_value == max_value:
+                return ([(float(min_value), float(max_value), float(number_of_values))])
+
 
             while True:
                 _10 = decimal.Decimal(10)
