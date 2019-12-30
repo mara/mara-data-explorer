@@ -1,9 +1,12 @@
 # Changelog
 
 
-## 2.1.1
+## 2.2.0 (2019-12-30)
+
 - Include button to display data set query
+- Improve histogram charts: move bucket computation for number and date histograms from SQL to Python (much faster, better buckets), improve speed of other histogram queries
 - Add numeric as a valid type in a data set
+- Quote table names so that they can contain whitespaces
 
 
 ## 2.1.0 (2019-07-02)
