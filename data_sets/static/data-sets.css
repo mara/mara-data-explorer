@@ -15,9 +15,7 @@
 }
 
 #preview td > ul > li {
-    list-style-position: inside;
-    white-space: nowrap;
-    /*display: inline-block;*/
+    margin-left: 1em;
 }
 
 #preview td span.preview-value {
