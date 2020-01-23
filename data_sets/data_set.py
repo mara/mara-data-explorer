@@ -83,7 +83,7 @@ ORDER BY attnum""", (self.database_table, self.database_schema))
                         type = 'text'
                     elif column_type in ['bigint', 'integer', 'real', 'smallint', 'double precision', 'numeric']:
                         type = 'number'
-                    elif column_type in ['timestamp', 'timestamp with time zone', 'date']:
+                    elif column_type in ['timestamp', 'timestamp with time zone', 'timestamp without time zone', 'date']:
                         type = 'date'
                     elif column_type in ['json', 'jsonb']:
                         type = 'json'
