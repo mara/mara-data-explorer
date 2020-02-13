@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.2.1 (2020-02-13)
+
+- improve display of text arrays
+- add column type timestamp without time zone
+
 
 ## 2.2.0 (2019-12-30)
 

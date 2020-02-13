@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='data-sets',
-    version='2.1.0',
+    version='2.2.1',
 
     description='Flask based UI for displaying & segmenting a single database table',
 
