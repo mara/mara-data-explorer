@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.2 (2020-03-31)
+
+- add column type: time with time zone and time without time zone
+
 ## 2.2.1 (2020-02-13)
 
 - improve display of text arrays
