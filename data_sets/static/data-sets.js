@@ -156,9 +156,18 @@ function DataSetPage(baseUrl, args, pageSize, chartColor) {
 
             // fill columns card
             column_check_boxes = [];
+            // select-all checkbox
+            column_check_boxes.push($('<label><input type="checkbox" name="columns_checkbox" value="all" /> Select all </label>').change(function () {
+                checkboxes = document.getElementsByName('columns_checkbox');
+                console.log(checkboxes[0].checked);
+                for (var i = 1, n = checkboxes.length; i < n; i++) {
+                    checkboxes[i].checked = checkboxes[0].checked;
+                }
+                updateColumns();
+            }));
             allColumns.forEach(function (column) {
                 var columnType = columnTypesByColumnName[column.column_name];
-                column_check_boxes.push($('<label><input type="checkbox" value="' + column.column_name + '" '
+                column_check_boxes.push($('<label><input type="checkbox" name="columns_checkbox" value="' + column.column_name + '" '
                     + ($.inArray(column.column_name, query.column_names) > -1 ? ' checked="checked" ' : '')
                     + '/> ' + column.column_name + '</label>').change(updateColumns));
 
