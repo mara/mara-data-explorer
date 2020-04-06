@@ -127,8 +127,9 @@ FROM "{self.data_set.database_schema}"."{self.data_set.database_table}"
             if self.sort_order and self.sort_column_name:
                 sql += f'\nORDER BY "{self.sort_column_name}" {self.sort_order} NULLS LAST\n';
 
-            if limit != None and offset != None:
+            if limit is not None:
                 sql += f'\nLIMIT {int(limit)}\n'
+            if offset is not None:
                 sql += f'\nOFFSET {int(offset)}\n'
 
             return sql
@@ -186,6 +187,45 @@ FROM "{self.data_set.database_schema}"."{self.data_set.database_table}"
 
         return subprocess.check_output(command, shell=True)
 
+    def as_spreadsheet(self, header: bool = True, limit=None, offset=None, include_personal_data: bool = True):
+        """
+        Runs the query and returns the result as a list of lists (rows)
+        Args:
+            header: When True, include a header row with the column names
+            limit: How many rows to return at max
+            offset: Which row to start with
+            include_personal_data: When True, include columns that contain personal data
+
+        Returns: A list of list values (rows)
+        """
+        if not self.column_names:  # table probably does not exists or no columns are selected
+            return []
+        with mara_db.postgresql.postgres_cursor_context(self.data_set.database_alias) as cursor:
+            cursor.execute(self.to_sql(limit=limit, offset=offset, include_personal_data=include_personal_data))
+            result = cursor.fetchall()
+            data = []
+            if header is True:
+                column_names = [desc[0] for desc in cursor.description]
+                data.append(column_names)
+            for row in result:
+                row_list = []
+                for value in list(row):
+                    if isinstance(value, str):
+                        list_value_str = value.replace('\t', ' - ')
+                        # no more than 50k characters for a single cell value (Google API limit reference)
+                        row_list.append((list_value_str[:48995] + ' ... ') if len(list_value_str) > 50000 else value)
+                    elif isinstance(value, list):
+                        list_value_str = str(value).replace('\t', ' - ') if len(value) > 0 else ''
+                        row_list.append(
+                            (list_value_str[:48995] + ' ... ') if len(list_value_str) > 50000 else list_value_str)
+                    elif isinstance(value, datetime.datetime):
+                        row_list.append(str(value.strftime("%d-%m-%Y")))
+                    else:
+                        row_list.append(value)
+                data.append(row_list)
+
+            return data
+
     def number_distribution(self, column_name):
         """Returns a frequency histogram for a number column"""
         with mara_db.postgresql.postgres_cursor_context(self.data_set.database_alias) as cursor:
@@ -209,7 +249,6 @@ WHERE "{column_name}" IS NOT NULL
             # when there is only a single value
             if min_value == max_value:
                 return ([(float(min_value), float(max_value), float(number_of_values))])
-
 
             while True:
                 _10 = decimal.Decimal(10)
