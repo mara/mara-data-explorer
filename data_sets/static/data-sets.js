@@ -158,8 +158,7 @@ function DataSetPage(baseUrl, args, pageSize, chartColor) {
             column_check_boxes = [];
             // select-all checkbox
             column_check_boxes.push($('<label><input type="checkbox" name="columns_checkbox" value="all" /> Select all </label>').change(function () {
-                checkboxes = document.getElementsByName('columns_checkbox');
-                console.log(checkboxes[0].checked);
+                var checkboxes = document.getElementsByName('columns_checkbox');
                 for (var i = 1, n = checkboxes.length; i < n; i++) {
                     checkboxes[i].checked = checkboxes[0].checked;
                 }
