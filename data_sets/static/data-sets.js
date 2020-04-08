@@ -154,16 +154,20 @@ function DataSetPage(baseUrl, args, pageSize, chartColor) {
             updateDistributionCharts(true);
 
 
+            $('#select-all').click(function (e) { e.preventDefault();
+                var select_all_text = this.text.replace(' ', '').toLowerCase();
+
+                var checkboxes = document.getElementsByName('columns_checkbox');
+                for (var i = 0, n = checkboxes.length; i < n; i++) {
+                    checkboxes[i].checked = (select_all_text === 'select all') ? (true) : (false);
+                }
+                this.text = (select_all_text === 'select all') ? (' Deselect all') : (' Select all');
+                updateColumns();
+                return false;
+            });
+
             // fill columns card
             column_check_boxes = [];
-            // select-all checkbox
-            column_check_boxes.push($('<label><input type="checkbox" name="columns_checkbox" value="all" /> Select all </label>').change(function () {
-                var checkboxes = document.getElementsByName('columns_checkbox');
-                for (var i = 1, n = checkboxes.length; i < n; i++) {
-                    checkboxes[i].checked = checkboxes[0].checked;
-                }
-                updateColumns();
-            }));
             allColumns.forEach(function (column) {
                 var columnType = columnTypesByColumnName[column.column_name];
                 column_check_boxes.push($('<label><input type="checkbox" name="columns_checkbox" value="' + column.column_name + '" '
