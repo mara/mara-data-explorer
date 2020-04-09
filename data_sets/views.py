@@ -10,7 +10,10 @@ from . import config
 import google_auth_oauthlib.flow
 from googleapiclient.discovery import build
 
-# import google.oauth2.credentials
+SCOPES = ['https://www.googleapis.com/auth/userinfo.profile', 'openid',
+          'https://www.googleapis.com/auth/drive.file',
+          'https://www.googleapis.com/auth/spreadsheets',
+          'https://www.googleapis.com/auth/userinfo.email']
 
 blueprint = flask.Blueprint('data_sets', __name__, static_folder='static',
                             url_prefix='/data-sets', template_folder='templates')
@@ -62,7 +65,7 @@ def data_set_page(data_set_id, query_id):
         return flask.redirect(flask.url_for('data_sets.index_page'))
 
     action_buttons = []
-    if config.google_oauth2_client_secrets_file():
+    if config.oauth2_client_config():
         action_buttons.append(response.ActionButton(action='javascript:dataSetPage.exportToSpreadsheet()',
                                                     icon='cloud-upload',
                                                     label='Spreadsheet', title='Export to a Google Spreadsheet'))
@@ -185,6 +188,17 @@ document.addEventListener('DOMContentLoaded', function() {{
                                               'aria-label': "Close"})[
                                       _.span(**{'aria-hidden': 'true'})['&times']]],
                               _.div(class_="modal-body")[
+                                  'Number format: &nbsp',
+                                  _.input(type="radio", value=".", name="decimal-mark",
+                                          checked="checked"), ' 42.7 &nbsp&nbsp',
+                                  _.input(type="radio", value=",", name="decimal-mark"), ' 42,7 &nbsp&nbsp',
+                                  _.hr,
+                                  'Array format: &nbsp',
+                                  _.input(type="radio", value="curly", name="array-format",
+                                          checked="checked"), ' {"a", "b"} &nbsp&nbsp',
+                                  _.input(type="radio", value="normal", name="array-format"), ' ["a", "b"] &nbsp&nbsp',
+                                  _.input(type="radio", value="tuple", name="array-format"), ' ("a", "b") &nbsp&nbsp',
+                                  _.hr,
                                   'By clicking Export below:',
                                   _.br,
                                   _.ul[
@@ -356,15 +370,6 @@ def download_csv(data_set_id):
         return response
 
 
-def credentials_to_dict(credentials):
-    return {'token': credentials.token,
-            'refresh_token': credentials.refresh_token,
-            'token_uri': credentials.token_uri,
-            'client_id': credentials.client_id,
-            'client_secret': credentials.client_secret,
-            'scopes': credentials.scopes}
-
-
 @blueprint.route('/.oauth2_export_to_spreadsheet', methods=['POST'])
 def oauth2_export_to_spreadsheet():
     import os
@@ -375,17 +380,13 @@ def oauth2_export_to_spreadsheet():
     if current_user_has_permission(query):
         flask.session['query_for_callback'] = json.loads(flask.request.form['query'])  # flask.request.json
 
-        # Use the client_secret.json file to identify the application requesting
-        # authorization. The client ID (from that file) and access scopes are required.
-        flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(
-            config.google_oauth2_client_secrets_file(),
-            scopes=['https://www.googleapis.com/auth/userinfo.profile', 'openid',
-                    'https://www.googleapis.com/auth/drive.file',
-                    'https://www.googleapis.com/auth/spreadsheets',
-                    'https://www.googleapis.com/auth/userinfo.email'])
+        # Authorization
+        flow = google_auth_oauthlib.flow.Flow.from_client_config(
+            config.oauth2_client_config(),
+            scopes=SCOPES)
 
         # Indicate where the API server will redirect the user after the user completes
-        # the authorization flow. The redirect URI is required.
+        # the authorization flow. Required.
         flow.redirect_uri = flask.url_for('data_sets.oauth2callback', _external=True)
 
         # Generate URL for request to Google's OAuth 2.0 server
@@ -398,6 +399,9 @@ def oauth2_export_to_spreadsheet():
 
         # Store the state so the callback can verify the auth server response.
         flask.session['state'] = state
+        # Store parameters for callback
+        flask.session['decimal_mark'] = flask.request.form['decimal-mark']
+        flask.session['array_format'] = flask.request.form['array-format']
 
         return flask.redirect(authorization_url)
     else:
@@ -413,61 +417,77 @@ def oauth2callback():
     # verified in the authorization server response.
     state = flask.session['state']
 
-    flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(
-        config.google_oauth2_client_secrets_file(),
-        scopes=['https://www.googleapis.com/auth/userinfo.profile', 'openid',
-                'https://www.googleapis.com/auth/drive.file',
-                'https://www.googleapis.com/auth/spreadsheets',
-                'https://www.googleapis.com/auth/userinfo.email'],
+    flow = google_auth_oauthlib.flow.Flow.from_client_config(
+        config.oauth2_client_config(),
+        scopes=SCOPES,
         state=state)
+
     flow.redirect_uri = flask.url_for('data_sets.oauth2callback', _external=True)
 
     # Use the authorization server's response to fetch the OAuth 2.0 tokens.
     authorization_response = flask.request.url
     flow.fetch_token(authorization_response=authorization_response)
 
-    # Store credentials in the session.
-    # ACTION ITEM: In a production app, you likely want to save these
-    #              credentials in a persistent database instead.
-    credentials = flow.credentials
-    flask.session['credentials'] = credentials_to_dict(credentials)
-
     spreadsheet_title = query.data_set_id + ('-' + query.query_id if query.query_id else '') \
                         + '-' + datetime.date.today().isoformat()
 
+    decimal_mark = flask.session.pop('decimal_mark')
+    array_format = flask.session.pop('array_format')
+
+    credentials = flow.credentials
     service = build('sheets', 'v4', credentials=credentials)
     spreadsheet_body = {
         'properties': {
-            'title': spreadsheet_title
+            'title': spreadsheet_title,
+            # Determine decimal-mark through the Spreadsheet locale
+            'locale': 'de_DE' if decimal_mark == ',' else 'en_US'
         }
     }
 
     spreadsheet = service.spreadsheets().create(body=spreadsheet_body, fields='spreadsheetId')
-    response = spreadsheet.execute()
-    spreadsheet_id = response.get('spreadsheetId')
+    api_response = spreadsheet.execute()
+    spreadsheet_id = api_response.get('spreadsheetId')
 
-    data = query.as_spreadsheet(limit=100000)
-
-    body = {
-        "data": [
-            {
-                # data as list of lists (rows). Double quotes mandatory
-                "values": data,
-                "range": "A1",
-                "majorDimension": "ROWS"
+    # Upload data from generator in batches of 10K rows each. Each batch is a request
+    # Api limits: https://developers.google.com/sheets/api/limits
+    data_batch = []
+    spreadsheet_data_generator = query.as_spreadsheet(array_format=array_format, limit=100000)
+    row_count = 0
+    batch_length = 10000
+    for row in spreadsheet_data_generator:
+        row_count += 1
+        data_batch.append(row)
+        if row_count % batch_length == 0:
+            body = {
+                "data": [
+                    {
+                        "values": data_batch,
+                        "range": "A" + str(row_count - batch_length + 1),
+                        "majorDimension": "ROWS"
+                    }
+                ],
+                # USER_ENTERED: The values will be parsed as if the user typed them into the UI.
+                # Numbers will stay as numbers, but strings may be converted to numbers, dates, etc.
+                # RAW: The values the user has entered will not be parsed and will be stored as-is.
+                "valueInputOption": "USER_ENTERED"
             }
-        ],
-        # RAW: The values the user has entered will not be parsed and will be stored as-is.
-        # USER_ENTERED: The values will be parsed as if the user typed them into the UI.
-        # Numbers will stay as numbers, but strings may be converted to numbers, dates, etc.
-        # following the same rules that are applied when entering text into a cell via the Google Sheets UI.
-        "valueInputOption": "USER_ENTERED"
-    }
 
-    result = service.spreadsheets().values().batchUpdate(
-        spreadsheetId=spreadsheet_id,
-        body=body,
-    ).execute()
+            # Request of the current batch
+            service.spreadsheets().values().batchUpdate(spreadsheetId=spreadsheet_id, body=body).execute()
+
+            # Initialize next batch
+            data_batch = []
+
+    # Append remaining or less batch_length data if any
+    if row_count < batch_length:
+        body = {"data": [{"values": data_batch, "range": "A1", "majorDimension": "ROWS"}],
+                "valueInputOption": "USER_ENTERED"}
+        service.spreadsheets().values().batchUpdate(spreadsheetId=spreadsheet_id, body=body).execute()
+    elif row_count % batch_length > 0:
+        body = {"data": [{"values": data_batch, "range": "A" + str(row_count - len(data_batch) + 1),
+                          "majorDimension": "ROWS"}],
+                "valueInputOption": "USER_ENTERED"}
+        service.spreadsheets().values().batchUpdate(spreadsheetId=spreadsheet_id, body=body).execute()
 
     return flask.redirect('https://docs.google.com/spreadsheets/d/' + str(spreadsheet_id))
 

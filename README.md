@@ -69,3 +69,30 @@ def _data_sets():
     ]
 ```
 
+## Uploading data sets to Google Spreadsheets
+
+For enabling this feature, set the required Google client authorization credentials as in the example below. 
+For setting up such credentials, see [here](https://github.com/googleapis/google-api-python-client/blob/master/docs/oauth-web.md).
+
+This will enable the `Spreadsheet` export action button on the top right of the UI.
+
+![Data sets ui](docs/action-buttons.png)
+
+```python
+import data_sets.config
+from mara_app.monkey_patch import patch
+
+
+@patch(data_sets.config.oauth2_client_config)
+def oauth2_client_config():
+    """The client configuration as it originally appears in the client secrets file in json format"""
+    return {"web": {
+        "client_id": "...",
+        "project_id": "...",
+        "auth_uri": "...",
+        "token_uri": "https://oauth2.googleapis.com/token",
+        "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+        "client_secret": "...",
+        "redirect_uris": ["..."]}
+    }
+```

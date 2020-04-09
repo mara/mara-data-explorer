@@ -16,11 +16,24 @@ def charts_color() -> str:
     return '#008000'
 
 
-def google_oauth2_client_secrets_file():
+def oauth2_client_config():
     """
-    The client-secret-id json file as acquired from the required Google oauth2 credentials.
+    The client configuration as it originally appeared in a client secrets file,
+    acquired from the required Google oauth2 credentials.
+
     Optional for the Export-to-Spreadsheet feature. If None, the feature will be disabled.
     For setting up such credentials, see here:
-    https://github.com/googleapis/google-api-python-client/issues/678
+    https://developers.google.com/identity/protocols/oauth2/web-server
+
+    Example:
+    {"web":{
+        "client_id": "...",
+        "project_id": "...",
+        "auth_uri": "...",
+        "token_uri": "https://oauth2.googleapis.com/token",
+        "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+        "client_secret": "...",
+        "redirect_uris": ["..."]}
+    }
     """
     return None
