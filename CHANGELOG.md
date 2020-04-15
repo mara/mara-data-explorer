@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.3 (2020-03-31)
+
+- Add "Select All" columns checkbox
+
 ## 2.2.2 (2020-03-31)
 
 - add column type: time with time zone and time without time zone

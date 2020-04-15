@@ -76,6 +76,7 @@ def data_set_page(data_set_id, query_id):
                   _.div(class_='col-md-3')[
                       bootstrap.card(header_left='Query', body=_.div(id='query-details')[html.spinner()]),
                       bootstrap.card(header_left='Columns',
+                                     header_right=_.a(id='select-all', href='#')[' Select all'],
                                      body=[_.div(class_="form-group")[
                                                _.input(type="search", class_="columns-search form-control",
                                                        value="", placeholder="Filter")],
@@ -214,8 +215,8 @@ def data_set_preview(data_set_id):
     if query.column_names:
         if current_user_has_permission(query):
             rows = [_render_preview_row(query, row) for row
-                in query.run(limit=7, offset=0,
-                             include_personal_data=acl.current_user_has_permission(personal_data_acl_resource))]
+                    in query.run(limit=7, offset=0,
+                                 include_personal_data=acl.current_user_has_permission(personal_data_acl_resource))]
         else:
             rows = _.tr[_.td(colspan=len(query.column_names))[acl.inline_permission_denied_message()]]
 
