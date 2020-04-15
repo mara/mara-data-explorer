@@ -135,7 +135,8 @@ function DataSetPage(baseUrl, args, pageSize, chartColor) {
                     target.html('∅');
                 });
                 return;
-            };
+            }
+
             columnTypesByColumnName = {};
             allColumns.forEach(function (column, i) {
                 columnTypesByColumnName[column.column_name] = column.type;
@@ -154,16 +155,17 @@ function DataSetPage(baseUrl, args, pageSize, chartColor) {
             updateDistributionCharts(true);
 
 
-            $('#select-all').click(function (e) { e.preventDefault();
-                var select_all_text = this.text.replace(' ', '').toLowerCase();
+            $('#select-all').click(function (e) {
+                e.preventDefault();
+
+                var allSelected = query.column_names.length == allColumns.length;
 
                 var checkboxes = document.getElementsByName('columns_checkbox');
                 for (var i = 0, n = checkboxes.length; i < n; i++) {
-                    checkboxes[i].checked = (select_all_text === 'select all') ? (true) : (false);
+                    checkboxes[i].checked = !allSelected;
                 }
-                this.text = (select_all_text === 'select all') ? (' Deselect all') : (' Select all');
                 updateColumns();
-                return false;
+                this.blur();
             });
 
             // fill columns card
@@ -337,15 +339,15 @@ function DataSetPage(baseUrl, args, pageSize, chartColor) {
             }, false);
 
         // add auto-completion and event handlers
-        if (type == 'text' || type== 'text[]') {
+        if (type == 'text' || type == 'text[]') {
             var source = new Bloodhound({
                 datumTokenizer: Bloodhound.tokenizers.obj.whitespace("value"),
                 queryTokenizer: Bloodhound.tokenizers.whitespace,
                 cache: false,
                 remote: {
                     url: baseUrl + '/.auto-complete?term=%QUERY'
-                    + "&data-set-id=" + encodeURIComponent(query.data_set_id)
-                    + "&column-name=" + encodeURIComponent(query.filters[pos].column_name),
+                        + "&data-set-id=" + encodeURIComponent(query.data_set_id)
+                        + "&column-name=" + encodeURIComponent(query.filters[pos].column_name),
                     wildcard: "%QUERY"
                 }
             });
@@ -548,6 +550,7 @@ function DataSetPage(baseUrl, args, pageSize, chartColor) {
                 return this.value;
             }).get();
 
+        $('#select-all').text(query.column_names.length < allColumns.length ? 'Select all' : 'Deselect all');
         updatePreview();
         updateDistributionCharts(false);
     }
