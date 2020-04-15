@@ -135,7 +135,8 @@ function DataSetPage(baseUrl, args, pageSize, chartColor) {
                     target.html('∅');
                 });
                 return;
-            };
+            }
+
             columnTypesByColumnName = {};
             allColumns.forEach(function (column, i) {
                 columnTypesByColumnName[column.column_name] = column.type;
@@ -154,11 +155,24 @@ function DataSetPage(baseUrl, args, pageSize, chartColor) {
             updateDistributionCharts(true);
 
 
+            $('#select-all').click(function (e) {
+                e.preventDefault();
+
+                var allSelected = query.column_names.length == allColumns.length;
+
+                var checkboxes = document.getElementsByName('columns_checkbox');
+                for (var i = 0, n = checkboxes.length; i < n; i++) {
+                    checkboxes[i].checked = !allSelected;
+                }
+                updateColumns();
+                this.blur();
+            });
+
             // fill columns card
             column_check_boxes = [];
             allColumns.forEach(function (column) {
                 var columnType = columnTypesByColumnName[column.column_name];
-                column_check_boxes.push($('<label><input type="checkbox" value="' + column.column_name + '" '
+                column_check_boxes.push($('<label><input type="checkbox" name="columns_checkbox" value="' + column.column_name + '" '
                     + ($.inArray(column.column_name, query.column_names) > -1 ? ' checked="checked" ' : '')
                     + '/> ' + column.column_name + '</label>').change(updateColumns));
 
@@ -325,15 +339,15 @@ function DataSetPage(baseUrl, args, pageSize, chartColor) {
             }, false);
 
         // add auto-completion and event handlers
-        if (type == 'text' || type== 'text[]') {
+        if (type == 'text' || type == 'text[]') {
             var source = new Bloodhound({
                 datumTokenizer: Bloodhound.tokenizers.obj.whitespace("value"),
                 queryTokenizer: Bloodhound.tokenizers.whitespace,
                 cache: false,
                 remote: {
                     url: baseUrl + '/.auto-complete?term=%QUERY'
-                    + "&data-set-id=" + encodeURIComponent(query.data_set_id)
-                    + "&column-name=" + encodeURIComponent(query.filters[pos].column_name),
+                        + "&data-set-id=" + encodeURIComponent(query.data_set_id)
+                        + "&column-name=" + encodeURIComponent(query.filters[pos].column_name),
                     wildcard: "%QUERY"
                 }
             });
@@ -536,6 +550,7 @@ function DataSetPage(baseUrl, args, pageSize, chartColor) {
                 return this.value;
             }).get();
 
+        $('#select-all').text(query.column_names.length < allColumns.length ? 'Select all' : 'Deselect all');
         updatePreview();
         updateDistributionCharts(false);
     }

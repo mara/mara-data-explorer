@@ -93,6 +93,7 @@ def data_set_page(data_set_id, query_id):
                   _.div(class_='col-md-3')[
                       bootstrap.card(header_left='Query', body=_.div(id='query-details')[html.spinner()]),
                       bootstrap.card(header_left='Columns',
+                                     header_right=_.a(id='select-all', href='#')[' Select all'],
                                      body=[_.div(class_="form-group")[
                                                _.input(type="search", class_="columns-search form-control",
                                                        value="", placeholder="Filter")],
