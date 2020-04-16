@@ -69,22 +69,17 @@ def _data_sets():
     ]
 ```
 
-## Uploading data sets to Google Spreadsheets
+## Uploading data sets to Google sheets
 
-For enabling this feature, set the required Google client authorization credentials as in the example below. 
-For setting up such credentials, see [here](https://github.com/googleapis/google-api-python-client/blob/master/docs/oauth-web.md).
-
-This will enable the `Spreadsheet` export action button on the top right of the UI.
-
-![Data sets ui](docs/action-buttons.png)
+For enabling this feature, set the required Google client authorization credentials as in the example below.
 
 ```python
 import data_sets.config
 from mara_app.monkey_patch import patch
 
 
-@patch(data_sets.config.oauth2_client_config)
-def oauth2_client_config():
+@patch(data_sets.config.google_sheet_oauth2_client_config)
+def google_sheet_oauth2_client_config():
     """The client configuration as it originally appears in the client secrets file in json format"""
     return {"web": {
         "client_id": "...",
@@ -96,3 +91,37 @@ def oauth2_client_config():
         "redirect_uris": ["..."]}
     }
 ```
+
+This will enable the `Google sheet` export action button on the top right of the UI.
+
+![Data sets ui](docs/action-buttons.png)
+
+#### Google OAuth consent screen configuration
+
+Before setting up such credentials, the configuration of the application's [OAuth consent screen](https://console.developers.google.com/apis/credentials/consent) is required.
+
+The following `Scopes for Google APIs` are required for the integration:
+* email
+* profile
+* openid
+* ../auth/spreadsheets
+* ../auth/drive.file
+
+Configure the `Authorised domains` of the [consent screen](https://console.developers.google.com/apis/credentials/consent) as the domains that your applications' links are hosted on (i.e. project-a.com).
+
+Fill the `Application Homepage` and the `Application Privacy Policy` links, shown on the consent screen. Must be hosted on an `Authorized Domain`.
+
+#### Google OAuth 2.0 Client ID credentials setup
+
+For setting up the required Google OAuth 2.0 [credentials](https://console.developers.google.com/apis/credentials),
+see the official Google guide [here](https://github.com/googleapis/google-api-python-client/blob/master/docs/oauth-web.md).
+
+Configure the OAuth 2.0 Client ID's `Authorised redirect URIs` with the 
+authorization callback uris of the Mara Data sets application
+in the form of `https://app-domain/data-sets/google_sheet_oauth2callback` and as in the example below.
+Consider including localhost paths for ease of local developing and testing.
+
+![Data sets ui](docs/auth-redirect-uris.png)
+
+Download the Google OAuth 2.0 Client ID credentials in JSON format
+and use the content to provide configuration for the `data_sets.config.google_sheet_oauth2_client_config`.

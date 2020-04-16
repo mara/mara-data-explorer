@@ -187,10 +187,10 @@ FROM "{self.data_set.database_schema}"."{self.data_set.database_table}"
 
         return subprocess.check_output(command, shell=True)
 
-    def as_spreadsheet(self, array_format, header: bool = True, limit=None, offset=None,
-                       include_personal_data: bool = True):
+    def as_google_sheet(self, array_format, header: bool = True, limit=None, offset=None,
+                        include_personal_data: bool = True):
         """
-        Runs the query and returns the result as a spreadsheet data input (list of lists)
+        Runs the query and returns the result as Google sheet's data input (list of lists)
         Args:
             header: When True, include a header row with the column names
             limit: How many rows to return at max
@@ -198,7 +198,7 @@ FROM "{self.data_set.database_schema}"."{self.data_set.database_table}"
             include_personal_data: When True, include columns that contain personal data
             array_format: Array to string format for array types
 
-        Returns: A spreadsheet data input as list of lists
+        Returns: Google sheet's data input as list of lists
         """
         if not self.column_names:  # table probably does not exists or no columns are selected
             return []

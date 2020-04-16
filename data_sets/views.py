@@ -65,10 +65,10 @@ def data_set_page(data_set_id, query_id):
         return flask.redirect(flask.url_for('data_sets.index_page'))
 
     action_buttons = []
-    if config.oauth2_client_config():
-        action_buttons.append(response.ActionButton(action='javascript:dataSetPage.exportToSpreadsheet()',
+    if config.google_sheet_oauth2_client_config():
+        action_buttons.append(response.ActionButton(action='javascript:dataSetPage.exportToGoogleSheet()',
                                                     icon='cloud-upload',
-                                                    label='Spreadsheet', title='Export to a Google Spreadsheet'))
+                                                    label='Google sheet', title='Export to a Google sheet'))
     action_buttons.append(response.ActionButton(action='javascript:dataSetPage.downloadCSV()',
                                                 icon='download',
                                                 label='CSV', title='Download as CSV'))
@@ -177,14 +177,14 @@ document.addEventListener('DOMContentLoaded', function() {{
                                   _.button(id="csv-download-button", type="submit", class_="btn btn-primary")[
                                       'Download']]]]]],
 
-              _.form(action=flask.url_for('data_sets.oauth2_export_to_spreadsheet', data_set_id=data_set_id),
+              _.form(action=flask.url_for('data_sets.oauth2_export_to_google_sheet', data_set_id=data_set_id),
                      method='post',
                      target="_blank")[
-                  _.div(class_="modal fade", id="spreadsheet-export-dialog", tabindex="-1")[
+                  _.div(class_="modal fade", id="google-sheet-export-dialog", tabindex="-1")[
                       _.div(class_="modal-dialog", role='document')[
                           _.div(class_="modal-content")[
                               _.div(class_="modal-header")[
-                                  _.h5(class_='modal-title')['Google Spreadsheet export'],
+                                  _.h5(class_='modal-title')['Google sheet export'],
                                   _.button(**{'type': "button", 'class': "close", 'data-dismiss': "modal",
                                               'aria-label': "Close"})[
                                       _.span(**{'aria-hidden': 'true'})['&times']]],
@@ -206,12 +206,12 @@ document.addEventListener('DOMContentLoaded', function() {{
                                       _.li['Google authentication will be required.'],
                                       _.li['A maximum limit of 100.000 rows will be applied.'],
                                       _.li['A maximum limit of 50.000 characters per cell will be applied.'],
-                                      _.li['A Spreadsheet with the selected data will be available in a new tab.']
+                                      _.li['A Google sheet with the selected data will be available in a new tab.']
                                   ],
                                   _.input(type="hidden", name="query")
                               ],
                               _.div(class_="modal-footer")[
-                                  _.button(id="export-to-spreadsheet", type="submit", class_="btn btn-primary")[
+                                  _.button(id="export-to-google-sheet", type="submit", class_="btn btn-primary")[
                                       'Export']]]]]]
 
               ],
@@ -371,24 +371,24 @@ def download_csv(data_set_id):
         return response
 
 
-@blueprint.route('/.oauth2_export_to_spreadsheet', methods=['POST'])
-def oauth2_export_to_spreadsheet():
+@blueprint.route('/.oauth2_export_to_google_sheet', methods=['POST'])
+def oauth2_export_to_google_sheet():
     import os
     os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
     from .query import Query
     query = Query.from_dict(json.loads(flask.request.form['query']))
 
     if current_user_has_permission(query):
-        flask.session['query_for_callback'] = json.loads(flask.request.form['query'])  # flask.request.json
+        flask.session['query_for_google_sheet_callback'] = json.loads(flask.request.form['query'])  # flask.request.json
 
         # Authorization
         flow = google_auth_oauthlib.flow.Flow.from_client_config(
-            config.oauth2_client_config(),
+            config.google_sheet_oauth2_client_config(),
             scopes=SCOPES)
 
         # Indicate where the API server will redirect the user after the user completes
         # the authorization flow. Required.
-        flow.redirect_uri = flask.url_for('data_sets.oauth2callback', _external=True)
+        flow.redirect_uri = flask.url_for('data_sets.google_sheet_oauth2callback', _external=True)
 
         # Generate URL for request to Google's OAuth 2.0 server
         authorization_url, state = flow.authorization_url(
@@ -409,21 +409,21 @@ def oauth2_export_to_spreadsheet():
         return flask.make_response(acl.inline_permission_denied_message(), 403)
 
 
-@blueprint.route('oauth2callback', methods=['GET'])
-def oauth2callback():
+@blueprint.route('google_sheet_oauth2callback', methods=['GET'])
+def google_sheet_oauth2callback():
     from .query import Query
-    query = Query.from_dict(flask.session['query_for_callback'])
+    query = Query.from_dict(flask.session['query_for_google_sheet_callback'])
 
     # Specify the state when creating the flow in the callback so that it can
     # verified in the authorization server response.
     state = flask.session['state']
 
     flow = google_auth_oauthlib.flow.Flow.from_client_config(
-        config.oauth2_client_config(),
+        config.google_sheet_oauth2_client_config(),
         scopes=SCOPES,
         state=state)
 
-    flow.redirect_uri = flask.url_for('data_sets.oauth2callback', _external=True)
+    flow.redirect_uri = flask.url_for('data_sets.google_sheet_oauth2callback', _external=True)
 
     # Use the authorization server's response to fetch the OAuth 2.0 tokens.
     authorization_response = flask.request.url
@@ -440,7 +440,7 @@ def oauth2callback():
     spreadsheet_body = {
         'properties': {
             'title': spreadsheet_title,
-            # Determine decimal-mark through the Spreadsheet locale
+            # Determine decimal-mark through the Google sheet locale
             'locale': 'de_DE' if decimal_mark == ',' else 'en_US'
         }
     }
@@ -452,10 +452,10 @@ def oauth2callback():
     # Upload data from generator in batches of 10K rows each. Each batch is a request
     # Api limits: https://developers.google.com/sheets/api/limits
     data_batch = []
-    spreadsheet_data_generator = query.as_spreadsheet(array_format=array_format, limit=100000)
+    google_sheet_data_generator = query.as_google_sheet(array_format=array_format, limit=100000)
     row_count = 0
     batch_length = 10000
-    for row in spreadsheet_data_generator:
+    for row in google_sheet_data_generator:
         row_count += 1
         data_batch.append(row)
         if row_count % batch_length == 0:

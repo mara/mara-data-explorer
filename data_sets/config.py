@@ -16,12 +16,12 @@ def charts_color() -> str:
     return '#008000'
 
 
-def oauth2_client_config():
+def google_sheet_oauth2_client_config():
     """
     The client configuration as it originally appeared in a client secrets file,
     acquired from the required Google oauth2 credentials.
 
-    Optional for the Export-to-Spreadsheet feature. If None, the feature will be disabled.
+    Optional for the Export-to-Google-Sheet feature. If None, the feature will be disabled.
     For setting up such credentials, see here:
     https://developers.google.com/identity/protocols/oauth2/web-server
 

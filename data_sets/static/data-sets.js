@@ -635,10 +635,10 @@ function DataSetPage(baseUrl, args, pageSize, chartColor) {
         $('#download-csv-dialog').modal();
     }
 
-    /** exports current query's output to a google spreadsheet (modal) */
-    function exportToSpreadsheet() {
-        $('#spreadsheet-export-dialog input[name=query]').val(JSON.stringify(query));
-        $('#spreadsheet-export-dialog').modal();
+    /** exports current query's output to a google sheet (modal) */
+    function exportToGoogleSheet() {
+        $('#google-sheet-export-dialog input[name=query]').val(JSON.stringify(query));
+        $('#google-sheet-export-dialog').modal();
     }
 
     // options for drawing the distribution charts
@@ -780,6 +780,6 @@ function DataSetPage(baseUrl, args, pageSize, chartColor) {
         'load': load,
         'downloadCSV': downloadCSV,
         'displayQuery': displayQuery,
-        'exportToSpreadsheet': exportToSpreadsheet
+        'exportToGoogleSheet': exportToGoogleSheet
     };
 }
