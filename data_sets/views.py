@@ -65,13 +65,14 @@ def data_set_page(data_set_id, query_id):
         return flask.redirect(flask.url_for('data_sets.index_page'))
 
     action_buttons = []
+
+    action_buttons.append(response.ActionButton(action='javascript:dataSetPage.downloadCSV()',
+                                                icon='download',
+                                                label='CSV', title='Download as CSV'))
     if config.google_sheet_oauth2_client_config():
         action_buttons.append(response.ActionButton(action='javascript:dataSetPage.exportToGoogleSheet()',
                                                     icon='cloud-upload',
                                                     label='Google sheet', title='Export to a Google sheet'))
-    action_buttons.append(response.ActionButton(action='javascript:dataSetPage.downloadCSV()',
-                                                icon='download',
-                                                label='CSV', title='Download as CSV'))
     action_buttons.append(response.ActionButton(action='javascript:dataSetPage.load()',
                                                 icon='folder-open',
                                                 label='Load', title='Load previously saved query'))
@@ -452,10 +453,13 @@ def google_sheet_oauth2callback():
     # Upload data from generator in batches of 10K rows each. Each batch is a request
     # Api limits: https://developers.google.com/sheets/api/limits
     data_batch = []
-    google_sheet_data_generator = query.as_google_sheet(array_format=array_format, limit=100000)
+    google_sheet_rows = query.as_rows_for_google_sheet(
+        array_format=array_format,
+        limit=100000,
+        include_personal_data=acl.current_user_has_permission(personal_data_acl_resource))
     row_count = 0
     batch_length = 10000
-    for row in google_sheet_data_generator:
+    for row in google_sheet_rows:
         row_count += 1
         data_batch.append(row)
         if row_count % batch_length == 0:

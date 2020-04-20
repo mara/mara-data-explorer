@@ -187,8 +187,8 @@ FROM "{self.data_set.database_schema}"."{self.data_set.database_table}"
 
         return subprocess.check_output(command, shell=True)
 
-    def as_google_sheet(self, array_format, header: bool = True, limit=None, offset=None,
-                        include_personal_data: bool = True):
+    def as_rows_for_google_sheet(self, array_format, header: bool = True, limit=None,
+                                 include_personal_data: bool = True):
         """
         Runs the query and returns the result as Google sheet's data input (list of lists)
         Args:
@@ -203,7 +203,7 @@ FROM "{self.data_set.database_schema}"."{self.data_set.database_table}"
         if not self.column_names:  # table probably does not exists or no columns are selected
             return []
         with mara_db.postgresql.postgres_cursor_context(self.data_set.database_alias) as cursor:
-            cursor.execute(self.to_sql(limit=limit, offset=offset, include_personal_data=include_personal_data))
+            cursor.execute(self.to_sql(limit=limit, include_personal_data=include_personal_data))
             result = cursor.fetchall()
             if header is True:
                 column_names = [desc[0] for desc in cursor.description]
