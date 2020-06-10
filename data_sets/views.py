@@ -7,6 +7,14 @@ from mara_page import acl, navigation, response, bootstrap, _, html
 
 from . import config
 
+import google_auth_oauthlib.flow
+from googleapiclient.discovery import build
+
+SCOPES = ['https://www.googleapis.com/auth/userinfo.profile', 'openid',
+          'https://www.googleapis.com/auth/drive.file',
+          'https://www.googleapis.com/auth/spreadsheets',
+          'https://www.googleapis.com/auth/userinfo.email']
+
 blueprint = flask.Blueprint('data_sets', __name__, static_folder='static',
                             url_prefix='/data-sets', template_folder='templates')
 
@@ -56,14 +64,24 @@ def data_set_page(data_set_id, query_id):
         flask.flash(f'Data set "{data_set_id}" does not exist anymore', category='danger')
         return flask.redirect(flask.url_for('data_sets.index_page'))
 
-    action_buttons = [response.ActionButton(action='javascript:dataSetPage.downloadCSV()', icon='download',
-                                            label='CSV', title='Download as CSV'),
-                      response.ActionButton(action='javascript:dataSetPage.load()', icon='folder-open',
-                                            label='Load', title='Load previously saved query'),
-                      response.ActionButton(action='javascript:dataSetPage.save()', icon='save',
-                                            label='Save', title='Save query'),
-                      response.ActionButton(action='javascript:dataSetPage.displayQuery()', icon='eye',
-                                            label='SQL', title='Display query')]
+    action_buttons = []
+
+    action_buttons.append(response.ActionButton(action='javascript:dataSetPage.downloadCSV()',
+                                                icon='download',
+                                                label='CSV', title='Download as CSV'))
+    if config.google_sheet_oauth2_client_config():
+        action_buttons.append(response.ActionButton(action='javascript:dataSetPage.exportToGoogleSheet()',
+                                                    icon='cloud-upload',
+                                                    label='Google sheet', title='Export to a Google sheet'))
+    action_buttons.append(response.ActionButton(action='javascript:dataSetPage.load()',
+                                                icon='folder-open',
+                                                label='Load', title='Load previously saved query'))
+    action_buttons.append(response.ActionButton(action='javascript:dataSetPage.save()',
+                                                icon='save',
+                                                label='Save', title='Save query'))
+    action_buttons.append(response.ActionButton(action='javascript:dataSetPage.displayQuery()',
+                                                icon='eye',
+                                                label='SQL', title='Display query'))
 
     if query_id:
         action_buttons.insert(1, response.ActionButton(
@@ -158,7 +176,46 @@ document.addEventListener('DOMContentLoaded', function() {{
                                   _.input(type="hidden", name="query")],
                               _.div(class_="modal-footer")[
                                   _.button(id="csv-download-button", type="submit", class_="btn btn-primary")[
-                                      'Download']]]]]]],
+                                      'Download']]]]]],
+
+              _.form(action=flask.url_for('data_sets.oauth2_export_to_google_sheet', data_set_id=data_set_id),
+                     method='post',
+                     target="_blank")[
+                  _.div(class_="modal fade", id="google-sheet-export-dialog", tabindex="-1")[
+                      _.div(class_="modal-dialog", role='document')[
+                          _.div(class_="modal-content")[
+                              _.div(class_="modal-header")[
+                                  _.h5(class_='modal-title')['Google sheet export'],
+                                  _.button(**{'type': "button", 'class': "close", 'data-dismiss': "modal",
+                                              'aria-label': "Close"})[
+                                      _.span(**{'aria-hidden': 'true'})['&times']]],
+                              _.div(class_="modal-body")[
+                                  'Number format: &nbsp',
+                                  _.input(type="radio", value=".", name="decimal-mark",
+                                          checked="checked"), ' 42.7 &nbsp&nbsp',
+                                  _.input(type="radio", value=",", name="decimal-mark"), ' 42,7 &nbsp&nbsp',
+                                  _.hr,
+                                  'Array format: &nbsp',
+                                  _.input(type="radio", value="curly", name="array-format",
+                                          checked="checked"), ' {"a", "b"} &nbsp&nbsp',
+                                  _.input(type="radio", value="normal", name="array-format"), ' ["a", "b"] &nbsp&nbsp',
+                                  _.input(type="radio", value="tuple", name="array-format"), ' ("a", "b") &nbsp&nbsp',
+                                  _.hr,
+                                  'By clicking Export below:',
+                                  _.br,
+                                  _.ul[
+                                      _.li['Google authentication will be required.'],
+                                      _.li['A maximum limit of 100.000 rows will be applied.'],
+                                      _.li['A maximum limit of 50.000 characters per cell will be applied.'],
+                                      _.li['A Google sheet with the selected data will be available in a new tab.']
+                                  ],
+                                  _.input(type="hidden", name="query")
+                              ],
+                              _.div(class_="modal-footer")[
+                                  _.button(id="export-to-google-sheet", type="submit", class_="btn btn-primary")[
+                                      'Export']]]]]]
+
+              ],
         action_buttons=action_buttons,
         js_files=['https://www.gstatic.com/charts/loader.js',
                   flask.url_for('data_sets.static', filename='tagsinput.js'),
@@ -313,6 +370,131 @@ def download_csv(data_set_id):
         response.headers['Content-disposition'] = f'attachment; filename="{file_name}"'
 
         return response
+
+
+@blueprint.route('/.oauth2_export_to_google_sheet', methods=['POST'])
+def oauth2_export_to_google_sheet():
+    import os
+    os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+    from .query import Query
+    query = Query.from_dict(json.loads(flask.request.form['query']))
+
+    if current_user_has_permission(query):
+        flask.session['query_for_google_sheet_callback'] = json.loads(flask.request.form['query'])  # flask.request.json
+
+        # Authorization
+        flow = google_auth_oauthlib.flow.Flow.from_client_config(
+            config.google_sheet_oauth2_client_config(),
+            scopes=SCOPES)
+
+        # Indicate where the API server will redirect the user after the user completes
+        # the authorization flow. Required.
+        flow.redirect_uri = flask.url_for('data_sets.google_sheet_oauth2callback', _external=True)
+
+        # Generate URL for request to Google's OAuth 2.0 server
+        authorization_url, state = flow.authorization_url(
+            # Enable offline access so that you can refresh an access token without
+            # re-prompting the user for permission. Recommended for web server apps.
+            access_type='offline',
+            # Enable incremental authorization. Recommended as a best practice
+            include_granted_scopes='true')
+
+        # Store the state so the callback can verify the auth server response.
+        flask.session['state'] = state
+        # Store parameters for callback
+        flask.session['decimal_mark'] = flask.request.form['decimal-mark']
+        flask.session['array_format'] = flask.request.form['array-format']
+
+        return flask.redirect(authorization_url)
+    else:
+        return flask.make_response(acl.inline_permission_denied_message(), 403)
+
+
+@blueprint.route('google_sheet_oauth2callback', methods=['GET'])
+def google_sheet_oauth2callback():
+    from .query import Query
+    query = Query.from_dict(flask.session['query_for_google_sheet_callback'])
+
+    # Specify the state when creating the flow in the callback so that it can
+    # verified in the authorization server response.
+    state = flask.session['state']
+
+    flow = google_auth_oauthlib.flow.Flow.from_client_config(
+        config.google_sheet_oauth2_client_config(),
+        scopes=SCOPES,
+        state=state)
+
+    flow.redirect_uri = flask.url_for('data_sets.google_sheet_oauth2callback', _external=True)
+
+    # Use the authorization server's response to fetch the OAuth 2.0 tokens.
+    authorization_response = flask.request.url
+    flow.fetch_token(authorization_response=authorization_response)
+
+    spreadsheet_title = query.data_set_id + ('-' + query.query_id if query.query_id else '') \
+                        + '-' + datetime.date.today().isoformat()
+
+    decimal_mark = flask.session.pop('decimal_mark')
+    array_format = flask.session.pop('array_format')
+
+    credentials = flow.credentials
+    service = build('sheets', 'v4', credentials=credentials)
+    spreadsheet_body = {
+        'properties': {
+            'title': spreadsheet_title,
+            # Determine decimal-mark through the Google sheet locale
+            'locale': 'de_DE' if decimal_mark == ',' else 'en_US'
+        }
+    }
+
+    spreadsheet = service.spreadsheets().create(body=spreadsheet_body, fields='spreadsheetId')
+    api_response = spreadsheet.execute()
+    spreadsheet_id = api_response.get('spreadsheetId')
+
+    # Upload data from generator in batches of 10K rows each. Each batch is a request
+    # Api limits: https://developers.google.com/sheets/api/limits
+    data_batch = []
+    google_sheet_rows = query.as_rows_for_google_sheet(
+        array_format=array_format,
+        limit=100000,
+        include_personal_data=acl.current_user_has_permission(personal_data_acl_resource))
+    row_count = 0
+    batch_length = 10000
+    for row in google_sheet_rows:
+        row_count += 1
+        data_batch.append(row)
+        if row_count % batch_length == 0:
+            body = {
+                "data": [
+                    {
+                        "values": data_batch,
+                        "range": "A" + str(row_count - batch_length + 1),
+                        "majorDimension": "ROWS"
+                    }
+                ],
+                # USER_ENTERED: The values will be parsed as if the user typed them into the UI.
+                # Numbers will stay as numbers, but strings may be converted to numbers, dates, etc.
+                # RAW: The values the user has entered will not be parsed and will be stored as-is.
+                "valueInputOption": "USER_ENTERED"
+            }
+
+            # Request of the current batch
+            service.spreadsheets().values().batchUpdate(spreadsheetId=spreadsheet_id, body=body).execute()
+
+            # Initialize next batch
+            data_batch = []
+
+    # Append remaining or less batch_length data if any
+    if row_count < batch_length:
+        body = {"data": [{"values": data_batch, "range": "A1", "majorDimension": "ROWS"}],
+                "valueInputOption": "USER_ENTERED"}
+        service.spreadsheets().values().batchUpdate(spreadsheetId=spreadsheet_id, body=body).execute()
+    elif row_count % batch_length > 0:
+        body = {"data": [{"values": data_batch, "range": "A" + str(row_count - len(data_batch) + 1),
+                          "majorDimension": "ROWS"}],
+                "valueInputOption": "USER_ENTERED"}
+        service.spreadsheets().values().batchUpdate(spreadsheetId=spreadsheet_id, body=body).execute()
+
+    return flask.redirect('https://docs.google.com/spreadsheets/d/' + str(spreadsheet_id))
 
 
 @blueprint.route('/.distribution-chart-<int:pos>', methods=['POST'])

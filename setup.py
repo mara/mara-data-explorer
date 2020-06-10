@@ -9,7 +9,10 @@ setup(
     install_requires=[
         'mara-db>=4.0.0',
         'mara-page>=1.4.1',
-        'arrow'
+        'arrow',
+        'google-auth',
+        'google-auth-oauthlib',
+        'google-auth-httplib2'
     ],
 
     dependency_links=[
