@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.4.0 (2020-06-10)
+
+- Add upload to Google Sheet feature
+
 ## 2.2.3 (2020-03-31)
 
 - Add "Select All" columns checkbox
