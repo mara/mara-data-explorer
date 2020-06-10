@@ -1,14 +1,14 @@
 """Data sets UI"""
 import datetime
 import json
-
+import os
+import sys
 import flask
 from mara_page import acl, navigation, response, bootstrap, _, html
 
 from . import config
 
-import google_auth_oauthlib.flow
-from googleapiclient.discovery import build
+
 
 SCOPES = ['https://www.googleapis.com/auth/userinfo.profile', 'openid',
           'https://www.googleapis.com/auth/drive.file',
@@ -374,8 +374,16 @@ def download_csv(data_set_id):
 
 @blueprint.route('/.oauth2_export_to_google_sheet', methods=['POST'])
 def oauth2_export_to_google_sheet():
-    import os
+    try:
+        import google_auth_oauthlib.flow
+        import googleapiclient.discovery
+    except ImportError:
+        return flask.make_response(
+            str(_.tt(style='color:red')["Please install the packages 'google_auth_oauthlib' and 'google-api-python-client'"]),
+            500)
+
     os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+
     from .query import Query
     query = Query.from_dict(json.loads(flask.request.form['query']))
 
@@ -412,6 +420,14 @@ def oauth2_export_to_google_sheet():
 
 @blueprint.route('google_sheet_oauth2callback', methods=['GET'])
 def google_sheet_oauth2callback():
+    try:
+        import google_auth_oauthlib.flow
+        import googleapiclient.discovery
+    except ImportError:
+        return flask.make_response(
+            str(_.tt(style='color:red')["Please install the packages 'google_auth_oauthlib' and 'google-api-python-client'"]),
+            500)
+
     from .query import Query
     query = Query.from_dict(flask.session['query_for_google_sheet_callback'])
 
@@ -437,7 +453,7 @@ def google_sheet_oauth2callback():
     array_format = flask.session.pop('array_format')
 
     credentials = flow.credentials
-    service = build('sheets', 'v4', credentials=credentials)
+    service = googleapiclient.discovery.build('sheets', 'v4', credentials=credentials)
     spreadsheet_body = {
         'properties': {
             'title': spreadsheet_title,

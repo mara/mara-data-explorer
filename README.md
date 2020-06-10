@@ -71,7 +71,9 @@ def _data_sets():
 
 ## Uploading data sets to Google sheets
 
-For enabling this feature, set the required Google client authorization credentials as in the example below.
+For enabling this feature, add the `google_auth_oauthlib` and `google-api-python-client` packages as a dependency to your project. 
+
+Then set the required Google client authorization credentials as in the example below.
 
 ```python
 import data_sets.config
@@ -93,6 +95,8 @@ def google_sheet_oauth2_client_config():
 ```
 
 This will enable the `Google sheet` export action button on the top right of the UI.
+
+
 
 ![Data sets ui](docs/action-buttons.png)
 
