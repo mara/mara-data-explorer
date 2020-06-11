@@ -1,5 +1,19 @@
 # Changelog
 
+
+## 3.0.0 (2020-06-11)
+
+Rename package from `data_sets` to `mara_data_explorer`.
+
+**required changes**
+
+- In requiremnts.txt, change `-e git+https://github.com/mara/data-sets.git@2.4.1#egg=data-sets` to `-e git+https://github.com/mara/mara-data-explorer.git@3.0.0#egg=mara-data-explorer`
+- In your project code, replace all imports from `data_sets` to `mara_data_explorer`. Might work: `s/import data_sets/import mara_data_explorer/g`
+- Adapt navigation and ACL entries, if you have any. 
+
+Here's an example of how that looks at the mara example project 2: https://github.com/mara/mara-example-project-2/commit/953ee5f2ac6bff3a15b677f4fad23d868a381ebe
+
+
 ## 2.4.0 - 2.4.1 (2020-06-10)
 
 - Add upload to Google Sheet feature

@@ -18,7 +18,7 @@ def MARA_AUTOMIGRATE_SQLALCHEMY_MODELS():
 
 def MARA_ACL_RESOURCES():
     from . import views
-    return {'Data Sets': views.acl_resource,
+    return {'Explore': views.acl_resource,
             'Personal Data': views.personal_data_acl_resource}
 
 
@@ -28,4 +28,4 @@ def MARA_CLICK_COMMANDS():
 
 def MARA_NAVIGATION_ENTRIES():
     from . import views
-    return {'Data Sets': views.navigation_entry()}
+    return {'Explore': views.navigation_entry()}

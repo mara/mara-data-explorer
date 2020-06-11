@@ -8,7 +8,7 @@ import math
 import decimal
 
 import sqlalchemy
-from data_sets.data_set import find_data_set
+from .data_set import find_data_set
 from sqlalchemy.ext.declarative import declarative_base
 
 import mara_db.dbs

@@ -1,4 +1,4 @@
-# Mara Data Sets
+# Mara Data Explorer
 
 A minimal Flask based UI for providing raw data access to analysts, data scientists and power users of a data warehouse. Allows segmentations based on single columns of a flat table with quick data exploration, distribution charts and CSV downloads.
 
@@ -9,7 +9,7 @@ A minimal Flask based UI for providing raw data access to analysts, data scienti
 No matter how powerful the reporting frontend of a data warehouse, many users want to have direct access to raw data without having to use SQL on the database directly. This can be 
 
 - BI product managers debugging data problems, 
-- analysts needing raw data for their Excel data analysis, 
+- analysts needing raw data for their Excel data exploration, 
 - machine learning engineers needing data sets for training models
 - marketeers wanting to integrate with 3rd party data platforms
 
@@ -46,18 +46,18 @@ Combinations of filters can be saved as a query for later reference. And queries
 
 ## Integrating and configuring data sets
 
-See the [mara example project](https://github.com/mara/mara-example-project) for how to integrate this feature into a Flask application. Individual data set tables are configured like this (see [app/data_sets.py](https://github.com/mara/mara-example-project/blob/master/app/data_sets.py)):
+See the [mara example project 1](https://github.com/mara/mara-example-project-1) and [mara example project 2](https://github.com/mara/mara-example-project-2) for how to integrate this feature into a Flask application. Individual data set tables are configured like this:
 
 ```python
-import data_sets.config
-import data_sets.data_set
+import mara_data_explorer.config
+import mara_data_explorer.data_set
 from mara_app.monkey_patch import patch
 
 
-@patch(data_sets.config.data_sets)
+@patch(mara_data_explorer.config.data_sets)
 def _data_sets():
     return [
-        data_sets.data_set.DataSet(
+        mara_data_explorer.data_set.DataSet(
             id='github-repo-activity', name='Github repo activities',
             database_alias='dwh', database_schema='gh_dim', database_table='repo_activity_data_set',
             default_column_names=['Date', 'User', 'Repo',
@@ -71,16 +71,14 @@ def _data_sets():
 
 ## Uploading data sets to Google sheets
 
-For enabling this feature, add the `google_auth_oauthlib` and `google-api-python-client` packages as a dependency to your project. 
-
-Then set the required Google client authorization credentials as in the example below.
+For enabling this feature, add the `google_auth_oauthlib` and `google-api-python-client` packages as a dependency to your project. Then set the required Google client authorization credentials as in the example below:
 
 ```python
-import data_sets.config
+import mara_data_explorer.config
 from mara_app.monkey_patch import patch
 
 
-@patch(data_sets.config.google_sheet_oauth2_client_config)
+@patch(mara_data_explorer.config.google_sheet_oauth2_client_config)
 def google_sheet_oauth2_client_config():
     """The client configuration as it originally appears in the client secrets file in json format"""
     return {"web": {
@@ -128,4 +126,4 @@ Consider including localhost paths for ease of local developing and testing.
 ![Data sets ui](docs/auth-redirect-uris.png)
 
 Download the Google OAuth 2.0 Client ID credentials in JSON format
-and use the content to provide configuration for the `data_sets.config.google_sheet_oauth2_client_config`.
+and use the content to provide configuration for the `mara_data_explorer.config.google_sheet_oauth2_client_config`.

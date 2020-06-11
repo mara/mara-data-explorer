@@ -2,7 +2,7 @@
 
 import mara_db.dbs
 import mara_db.postgresql
-from data_sets import config
+from . import config
 
 
 class Column():

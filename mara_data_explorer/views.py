@@ -1,24 +1,21 @@
-"""Data sets UI"""
+"""Flasked based UI"""
 import datetime
 import json
 import os
-import sys
 import flask
 from mara_page import acl, navigation, response, bootstrap, _, html
 
 from . import config
-
-
 
 SCOPES = ['https://www.googleapis.com/auth/userinfo.profile', 'openid',
           'https://www.googleapis.com/auth/drive.file',
           'https://www.googleapis.com/auth/spreadsheets',
           'https://www.googleapis.com/auth/userinfo.email']
 
-blueprint = flask.Blueprint('data_sets', __name__, static_folder='static',
-                            url_prefix='/data-sets', template_folder='templates')
+blueprint = flask.Blueprint('mara_data_explorer', __name__, static_folder='static',
+                            url_prefix='/explore', template_folder='templates')
 
-acl_resource = acl.AclResource(name='Data sets')
+acl_resource = acl.AclResource(name='Explore')
 personal_data_acl_resource = acl.AclResource(name='Personal Data')
 data_set_acl_resources = {}
 
@@ -33,12 +30,12 @@ def _create_acl_resource_for_each_data_set():
 
 def navigation_entry():
     return navigation.NavigationEntry(
-        label='Data Sets', uri_fn=lambda: flask.url_for('data_sets.index_page'), icon='table',
+        label='Explore', uri_fn=lambda: flask.url_for('mara_data_explorer.index_page'), icon='table',
         description='Raw data access & segmentation',
         children=[navigation.NavigationEntry(label='Overview', icon='list',
-                                             uri_fn=lambda: flask.url_for('data_sets.index_page'))]
+                                             uri_fn=lambda: flask.url_for('mara_data_explorer.index_page'))]
                  + [navigation.NavigationEntry(label=ds.name, icon='table',
-                                               uri_fn=lambda id=ds.id: flask.url_for('data_sets.data_set_page',
+                                               uri_fn=lambda id=ds.id: flask.url_for('mara_data_explorer.data_set_page',
                                                                                      data_set_id=id))
                     for ds in config.data_sets()])
 
@@ -47,12 +44,12 @@ def navigation_entry():
 def index_page():
     return response.Response(
         html=[bootstrap.card(
-            header_left=_.a(href=flask.url_for('data_sets.data_set_page', data_set_id=ds.id))[ds.name],
-            body=[html.asynchronous_content(flask.url_for('data_sets.data_set_preview', data_set_id=ds.id))])
+            header_left=_.a(href=flask.url_for('mara_data_explorer.data_set_page', data_set_id=ds.id))[ds.name],
+            body=[html.asynchronous_content(flask.url_for('mara_data_explorer.data_set_preview', data_set_id=ds.id))])
             for i, ds in enumerate(config.data_sets())],
         title='Data sets',
-        js_files=[flask.url_for('data_sets.static', filename='data-sets.js')],
-        css_files=[flask.url_for('data_sets.static', filename='data-sets.css')])
+        js_files=[flask.url_for('mara_data_explorer.static', filename='data-sets.js')],
+        css_files=[flask.url_for('mara_data_explorer.static', filename='data-sets.css')])
 
 
 @blueprint.route('/<data_set_id>', defaults={'query_id': None})
@@ -62,7 +59,7 @@ def data_set_page(data_set_id, query_id):
     ds = find_data_set(data_set_id)
     if not ds:
         flask.flash(f'Data set "{data_set_id}" does not exist anymore', category='danger')
-        return flask.redirect(flask.url_for('data_sets.index_page'))
+        return flask.redirect(flask.url_for('mara_data_explorer.index_page'))
 
     action_buttons = []
 
@@ -85,7 +82,7 @@ def data_set_page(data_set_id, query_id):
 
     if query_id:
         action_buttons.insert(1, response.ActionButton(
-            action=flask.url_for('data_sets._delete_query', data_set_id=data_set_id, query_id=query_id),
+            action=flask.url_for('mara_data_explorer._delete_query', data_set_id=data_set_id, query_id=query_id),
             icon='trash', label='Delete', title='Delete query'))
 
     return response.Response(
@@ -118,7 +115,7 @@ def data_set_page(data_set_id, query_id):
                   ]], _.script[f"""
 var dataSetPage = null;                  
 document.addEventListener('DOMContentLoaded', function() {{
-    dataSetPage = DataSetPage('{flask.url_for('data_sets.index_page')}', 
+    dataSetPage = DataSetPage('{flask.url_for('mara_data_explorer.index_page')}', 
                               {json.dumps(
             {'data_set_id': data_set_id, 'query_id': query_id, 'query': flask.request.get_json()})},
                               15, '{config.charts_color()}');
@@ -152,7 +149,7 @@ document.addEventListener('DOMContentLoaded', function() {{
                       ]
                   ]
               ],
-              _.form(action=flask.url_for('data_sets.download_csv', data_set_id=data_set_id), method='post')[
+              _.form(action=flask.url_for('mara_data_explorer.download_csv', data_set_id=data_set_id), method='post')[
                   _.div(class_="modal fade", id="download-csv-dialog", tabindex="-1")[
                       _.div(class_="modal-dialog", role='document')[
                           _.div(class_="modal-content")[
@@ -178,7 +175,7 @@ document.addEventListener('DOMContentLoaded', function() {{
                                   _.button(id="csv-download-button", type="submit", class_="btn btn-primary")[
                                       'Download']]]]]],
 
-              _.form(action=flask.url_for('data_sets.oauth2_export_to_google_sheet', data_set_id=data_set_id),
+              _.form(action=flask.url_for('mara_data_explorer.oauth2_export_to_google_sheet', data_set_id=data_set_id),
                      method='post',
                      target="_blank")[
                   _.div(class_="modal fade", id="google-sheet-export-dialog", tabindex="-1")[
@@ -218,11 +215,11 @@ document.addEventListener('DOMContentLoaded', function() {{
               ],
         action_buttons=action_buttons,
         js_files=['https://www.gstatic.com/charts/loader.js',
-                  flask.url_for('data_sets.static', filename='tagsinput.js'),
-                  flask.url_for('data_sets.static', filename='typeahead.js'),
-                  flask.url_for('data_sets.static', filename='data-sets.js')],
-        css_files=[flask.url_for('data_sets.static', filename='tagsinput.css'),
-                   flask.url_for('data_sets.static', filename='data-sets.css')])
+                  flask.url_for('mara_data_explorer.static', filename='tagsinput.js'),
+                  flask.url_for('mara_data_explorer.static', filename='typeahead.js'),
+                  flask.url_for('mara_data_explorer.static', filename='data-sets.js')],
+        css_files=[flask.url_for('mara_data_explorer.static', filename='tagsinput.css'),
+                   flask.url_for('mara_data_explorer.static', filename='data-sets.css')])
 
 
 @blueprint.route('/.initialize', methods=['POST'])
@@ -379,7 +376,8 @@ def oauth2_export_to_google_sheet():
         import googleapiclient.discovery
     except ImportError:
         return flask.make_response(
-            str(_.tt(style='color:red')["Please install the packages 'google_auth_oauthlib' and 'google-api-python-client'"]),
+            str(_.tt(style='color:red')[
+                    "Please install the packages 'google_auth_oauthlib' and 'google-api-python-client'"]),
             500)
 
     os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
@@ -397,7 +395,7 @@ def oauth2_export_to_google_sheet():
 
         # Indicate where the API server will redirect the user after the user completes
         # the authorization flow. Required.
-        flow.redirect_uri = flask.url_for('data_sets.google_sheet_oauth2callback', _external=True)
+        flow.redirect_uri = flask.url_for('mara_data_explorer.google_sheet_oauth2callback', _external=True)
 
         # Generate URL for request to Google's OAuth 2.0 server
         authorization_url, state = flow.authorization_url(
@@ -425,7 +423,8 @@ def google_sheet_oauth2callback():
         import googleapiclient.discovery
     except ImportError:
         return flask.make_response(
-            str(_.tt(style='color:red')["Please install the packages 'google_auth_oauthlib' and 'google-api-python-client'"]),
+            str(_.tt(style='color:red')[
+                    "Please install the packages 'google_auth_oauthlib' and 'google-api-python-client'"]),
             500)
 
     from .query import Query
@@ -440,7 +439,7 @@ def google_sheet_oauth2callback():
         scopes=SCOPES,
         state=state)
 
-    flow.redirect_uri = flask.url_for('data_sets.google_sheet_oauth2callback', _external=True)
+    flow.redirect_uri = flask.url_for('mara_data_explorer.google_sheet_oauth2callback', _external=True)
 
     # Use the authorization server's response to fetch the OAuth 2.0 tokens.
     authorization_response = flask.request.url
@@ -550,7 +549,7 @@ def save():
         query.save()
         flask.flash(f'Saved query ' + query.query_id, 'success')
         return flask.jsonify(
-            flask.url_for('data_sets.data_set_page', data_set_id=query.data_set.id, query_id=query.query_id))
+            flask.url_for('mara_data_explorer.data_set_page', data_set_id=query.data_set.id, query_id=query.query_id))
     else:
         flask.make_response(f'Not enough permissions to save query "{query.query_id}"', 403)
 
@@ -564,7 +563,7 @@ def query_list(data_set_id):
         return str(bootstrap.table(
             headers=['Query', 'Last changed', 'By'],
             rows=[_.tr[_.td[
-                           _.a(href=flask.url_for('data_sets.data_set_page', data_set_id=data_set_id, query_id=row[0]))[
+                           _.a(href=flask.url_for('mara_data_explorer.data_set_page', data_set_id=data_set_id, query_id=row[0]))[
                                row[0]]],
                        _.td[row[1].strftime('%Y-%m-%d')],
                        _.td[row[2]]] for row in queries]))
@@ -596,7 +595,7 @@ def _delete_query(data_set_id, query_id):
         delete_query(data_set_id, query_id)
         flask.flash(f'Deleted query "{query_id}" from "{data_set_id}"', 'success')
 
-    return flask.redirect(flask.url_for('data_sets.data_set_page', data_set_id=data_set_id))
+    return flask.redirect(flask.url_for('mara_data_explorer.data_set_page', data_set_id=data_set_id))
 
 
 def current_user_has_permission(query: 'Query') -> bool:

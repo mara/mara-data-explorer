@@ -2,7 +2,7 @@
 
 import functools
 
-from data_sets import data_set
+from . import data_set
 
 
 @functools.lru_cache(maxsize=None)
