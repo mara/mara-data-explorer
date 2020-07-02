@@ -310,7 +310,10 @@ def preview():
     else:
         rows = _.tr[_.td(colspan=len(query.column_names))[acl.inline_permission_denied_message()]]
 
-    return str(bootstrap.table(headers=[header(query.data_set.columns[c]) for c in query.column_names], rows=rows))
+    if rows:
+        return str(bootstrap.table(headers=[header(query.data_set.columns[c]) for c in query.column_names], rows=rows))
+    else:
+        return '∅'
 
 
 @blueprint.route('/.row-count', methods=['POST'])

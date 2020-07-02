@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='mara-data-explorer',
-    version='3.0.0',
+    version='3.0.1',
 
     description='Flask based UI for displaying & segmenting database tables',
 

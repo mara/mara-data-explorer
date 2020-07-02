@@ -130,7 +130,7 @@ function DataSetPage(baseUrl, args, pageSize, chartColor) {
             query = data.query;
             allColumns = data.all_columns;
 
-            if (query.column_names.length == 0) {
+            if (data.all_columns.length == 0) {
                 allTargets.forEach(function (target) {
                     target.html('∅');
                 });

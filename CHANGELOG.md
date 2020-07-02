@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.0.1 (2020-07-02)
+
+- Improve display when no columns are set as default columns
+
 
 ## 3.0.0 (2020-06-11)
 
