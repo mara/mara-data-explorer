@@ -15,6 +15,7 @@ import mara_db.dbs
 import mara_db.shell
 import mara_db.postgresql
 from mara_page import acl
+from functools import singledispatch
 
 Base = declarative_base()
 
@@ -82,9 +83,12 @@ class Query(Base):
 
         self.data_set_id = data_set_id
         self.query_id = re.sub(r'\W+', '-', query_id).lower() if query_id else ''
-        self.column_names = [column_name for column_name in
-                             (self.data_set.default_column_names if column_names == None else column_names)
-                             if column_name in self.data_set.columns]
+        self.column_names = [column_name for column_name in self.data_set.default_column_names
+                                 if column_name in self.data_set.columns]
+
+        if not self.column_names:
+            self.column_names = list(self.data_set.columns.keys())
+
         self.sort_column_name = sort_column_name if sort_column_name in self.data_set.columns else None
         self.sort_order = sort_order
         self.filters = [filter for filter in filters or [] if filter.column_name in self.data_set.columns]
@@ -105,27 +109,28 @@ class Query(Base):
         """
         if not self.column_names:  # table probably does not exists or no columns are selected
             return []
-        with mara_db.postgresql.postgres_cursor_context(self.data_set.database_alias) as cursor:
-            cursor.execute(self.to_sql(limit=limit, offset=offset, include_personal_data=include_personal_data))
-            return cursor.fetchall()
+        return execute_query(
+            self.data_set.database_alias,
+            self.to_sql(limit=limit, offset=offset, include_personal_data=include_personal_data))
 
     def to_sql(self, limit=None, offset=None, decimal_mark: str = '.', include_personal_data: bool = True):
+        db = self.data_set.database_alias
         if self.column_names:
             columns = []
             for column_name in self.column_names:
                 if (not include_personal_data) and (column_name in self.data_set.personal_data_column_names):
-                    columns.append(f"""'🔒' AS "{column_name}" """)
+                    columns.append(f"{quote_identifier(db,'🔒')} AS {quote_identifier(db,column_name)}")
                 elif self.data_set.columns[column_name].type == 'number' and decimal_mark == ',':
-                    columns.append(f'''REPLACE("{column_name}"::TEXT, '.', ',') AS "{column_name}"''')
+                    columns.append(f'''REPLACE({quote_identifier(db,column_name)}::TEXT, '.', ',') AS {quote_identifier(db, column_name)}''')
                 else:
-                    columns.append(f'"{column_name}"')
+                    columns.append(quote_identifier(db, column_name))
 
             sql = f"""
 SELECT """ + ',\n       '.join(columns) + f"""
-FROM "{self.data_set.database_schema}"."{self.data_set.database_table}"
+FROM {quote_identifier(db, self.data_set.database_schema)}.{quote_identifier(db, self.data_set.database_table)}
 """ + self.filters_to_sql()
             if self.sort_order and self.sort_column_name:
-                sql += f'\nORDER BY "{self.sort_column_name}" {self.sort_order} NULLS LAST\n';
+                sql += f'\nORDER BY {quote_identifier(db, self.sort_column_name)}" {self.sort_order} NULLS LAST\n';
 
             if limit is not None:
                 sql += f'\nLIMIT {int(limit)}\n'
@@ -146,32 +151,35 @@ FROM "{self.data_set.database_schema}"."{self.data_set.database_table}"
     def filter_to_sql(self, filter: Filter):
         """Renders a filter to a part of an SQL WHERE expression"""
         type = self.data_set.columns[filter.column_name].type
+        db = self.data_set.database_alias
         if type == 'text':
             if filter.operator == '~':
-                return f'"{filter.column_name}" ILIKE ANY(ARRAY[' \
+                return f'{quote_identifier(db, filter.column_name)} ILIKE ANY(ARRAY[' \
                        + ', '.join(f"'%{value}%'" for value in filter.value or ['']) + ']::TEXT[])'
             else:
-                return f'''"{filter.column_name}" {'IN' if filter.operator == '=' else 'NOT IN'} (''' \
+                return f'''{quote_identifier(db, filter.column_name)} {'IN' if filter.operator == '=' else 'NOT IN'} (''' \
                        + ', '.join(f"'{value}'" for value in filter.value or ['']) + ')'
         elif type == 'text[]':
-            clause = f'''"{filter.column_name}" && ARRAY[''' \
+            clause = f'''{quote_identifier(db,filter.column_name)} && ARRAY[''' \
                      + ', '.join(f"'{value}'" for value in filter.value or ['']) + ']::TEXT[]'
             if filter.operator == '!=':
                 clause = ' not (' + clause + ')'
             return clause
         elif type == 'number':
-            return f'''"{filter.column_name}" {filter.operator} {filter.value}'''
+            return f'''{quote_identifier(db, filter.column_name)} {filter.operator} {filter.value}'''
         elif type == 'date':
-            return f'''"{filter.column_name}"::Date {filter.operator} '{filter.value}' '''
+            return f'''{quote_identifier(db, filter.column_name)}"::Date {filter.operator} '{filter.value}' '''
         else:
             return '1=1'
 
     def row_count(self):
         """Compute how many rows will be returned by the current set of filters"""
-        with mara_db.postgresql.postgres_cursor_context(self.data_set.database_alias) as cursor:
-            cursor.execute(f'SELECT count(*) FROM "{self.data_set.database_schema}"."{self.data_set.database_table}" '
-                           + self.filters_to_sql())
-            return cursor.fetchone()[0]
+        db = self.data_set.database_alias
+        return execute_query(db, f'''
+SELECT count(*) 
+FROM {quote_identifier(db, self.data_set.database_schema)}.{quote_identifier(db, self.data_set.database_table)}
+{self.filters_to_sql()}
+''')[0][0]
 
     def filter_row_count(self, filter_pos):
         with mara_db.postgresql.postgres_cursor_context(self.data_set.database_alias) as cursor:
@@ -233,58 +241,76 @@ FROM "{self.data_set.database_schema}"."{self.data_set.database_table}"
 
     def number_distribution(self, column_name):
         """Returns a frequency histogram for a number column"""
-        with mara_db.postgresql.postgres_cursor_context(self.data_set.database_alias) as cursor:
-            cursor.execute(f"""
-SELECT min("{column_name}") :: NUMERIC AS min_value,
-       max("{column_name}") :: NUMERIC AS max_value,
+        db = self.data_set.database_alias
+        (min_value, max_value, number_of_values) = execute_query(db, f"""
+SELECT min({quote_identifier(db, column_name)}) AS min_value,
+       max({quote_identifier(db, column_name)}) AS max_value,
        count(*)                        AS number_of_values
-FROM "{self.data_set.database_schema}"."{self.data_set.database_table}"
-WHERE "{column_name}" IS NOT NULL
+FROM {quote_identifier(db,self.data_set.database_schema)}.{quote_identifier(db,self.data_set.database_table)}
+WHERE {quote_identifier(db,column_name)} IS NOT NULL
       {('AND ' + ' AND '.join([self.filter_to_sql(filter) for filter in self.filters])) if self.filters else ''}
-""")
-            (min_value, max_value, number_of_values) = cursor.fetchone()
-            if min_value == None:
-                return []
+""")[0]
 
-            min_buckets = 5
+        if min_value == None:
+            return []
 
-            # find the highest magnitude of 10
-            exponent = math.ceil(max(abs(min_value).log10(), abs(max_value).log10()))
+        # avoid problems with python float type
+        min_value = decimal.Decimal(min_value)
+        max_value = decimal.Decimal(max_value)
 
-            # when there is only a single value
-            if min_value == max_value:
-                return ([(float(min_value), float(max_value), float(number_of_values))])
+        min_buckets = 5
 
-            while True:
-                _10 = decimal.Decimal(10)
+        # find the highest magnitude of 10
+        exponent = math.ceil(max(abs(min_value).log10(), abs(max_value).log10()))
 
-                # truncate to the next lower magnitude of 10
-                min_ = math.floor(min_value / pow(_10, exponent))
-                max_ = math.ceil(max_value / pow(_10, exponent))
+        # when there is only a single value
+        if min_value == max_value:
+            return ([(float(min_value), float(max_value), float(number_of_values))])
 
-                if (max_ - min_) > min_buckets:
-                    # compute buckets (tuples of min and max values)
-                    cursor.execute(f"""
-SELECT width_bucket("{column_name}", {min_ * pow(_10, exponent)}, {max_ * pow(_10, exponent)}, {max_ - min_}) as bucket,
-      count(*) AS n
-FROM "{self.data_set.database_schema}"."{self.data_set.database_table}"
-WHERE "{column_name}" IS NOT NULL
-      {('AND ' + ' AND '.join([self.filter_to_sql(filter) for filter in self.filters])) if self.filters else ''}
+        while True:
+            _10 = decimal.Decimal(10)
+
+            # truncate to the next lower magnitude of 10
+            min_ = math.floor(min_value / pow(_10, exponent))
+            max_ = math.ceil(max_value / pow(_10, exponent))
+
+            if (max_ - min_) > min_buckets:
+                # compute buckets (tuples of min and max values)
+                buckets = execute_query(db, f"""
+SELECT width_bucket({quote_identifier(db, column_name)}, {min_ * pow(_10, exponent)}, {max_ * pow(_10, exponent)}, {max_ - min_}) as bucket,
+  count(*) AS n
+FROM {quote_identifier(db, self.data_set.database_schema)}.{quote_identifier(db, self.data_set.database_table)}
+WHERE {quote_identifier(db, column_name)} IS NOT NULL
+  {('AND ' + ' AND '.join([self.filter_to_sql(filter) for filter in self.filters])) if self.filters else ''}
 GROUP by bucket
 ORDER BY bucket
 """)
-                    return ([(float((min_ + bucket - 1) * pow(_10, exponent)),
-                              float((min_ + bucket) * pow(_10, exponent)),
-                              n) for bucket, n in cursor.fetchall()])
-                else:
-                    exponent += -1
+                return ([(float((min_ + bucket - 1) * pow(_10, exponent)),
+                          float((min_ + bucket) * pow(_10, exponent)),
+                          n) for bucket, n in cursor.fetchall()])
+            else:
+                exponent += -1
 
     def date_distribution(self, column_name):
         """Returns a frequency histogram for a date column"""
 
         import arrow
+        db = self.data_set.database_alias
+
+        (min_value, max_value) = execute_query(db, f"""
+SELECT min({quote_identifier(db, column_name)}) :: TIMESTAMPTZ AS min_value,
+       max({quote_identifier(db, column_name)}) :: TIMESTAMPTZ AS max_value
+FROM {quote_identifier(db, self.data_set.database_schema)}.{quote_identifier(db, self.data_set.database_table)}
+WHERE {quote_identifier(db, column_name)} IS NOT NULL
+      {('AND ' + ' AND '.join([self.filter_to_sql(filter) for filter in self.filters])) if self.filters else ''}
+""")[0]
+        if min_value == None:
+            return []
+
+        print(min_value, max_value)
 
         with mara_db.postgresql.postgres_cursor_context(self.data_set.database_alias) as cursor:
+
             with mara_db.postgresql.postgres_cursor_context(self.data_set.database_alias) as cursor:
                 cursor.execute(f"""
 SELECT min("{column_name}") :: TIMESTAMPTZ AS min_value,
@@ -323,17 +349,16 @@ ORDER BY d
 
     def text_distribution(self, column_name):
         """Returns the most frequent values and their counts for a column"""
-        with mara_db.postgresql.postgres_cursor_context(self.data_set.database_alias) as cursor:
-            cursor.execute(f'''
-SELECT "{column_name}" AS value,
+        db = self.data_set.database_alias
+        return execute_query(db, f'''
+SELECT {quote_identifier(db, column_name)} AS value,
        count(*) AS n
-FROM "{self.data_set.database_schema}"."{self.data_set.database_table}"
-WHERE "{column_name}" IS NOT NULL 
+FROM {quote_identifier(db, self.data_set.database_schema)}.{quote_identifier(db, self.data_set.database_table)}
+WHERE {quote_identifier(db, column_name)} IS NOT NULL 
       {('AND ' + ' AND '.join([self.filter_to_sql(filter) for filter in self.filters])) if self.filters else ''}
 GROUP BY value
 ORDER BY n DESC
 LIMIT 10''')
-            return cursor.fetchall()
 
     def text_array_distribution(self, column_name):
         """Returns the most frequent values and their counts for a text array column"""
@@ -423,3 +448,35 @@ WHERE data_set_id = {'%s'}
 ORDER BY updated_at DESC             
 ''', (data_set_id,))
         return cursor.fetchall()
+
+
+@singledispatch
+def execute_query(db: mara_db.dbs.DB, sql_statement:str) -> []:
+    """Execute an sql statement and return the result as an array"""
+    raise NotImplementedError(f'Please implement row_count for type "{db.__class__.__name__}"')
+
+
+@execute_query.register(str)
+def __(db: str, sql_statement: str):
+    return execute_query(mara_db.dbs.db(db), sql_statement)
+
+@execute_query.register(mara_db.dbs.BigQueryDB)
+def __(db: mara_db.dbs.BigQueryDB, sql_stament: str):
+    from mara_db.bigquery import bigquery_cursor_context
+
+    with bigquery_cursor_context(db) as cursor:
+        cursor.execute(sql_stament)
+        return [list(row) for row in cursor.fetchall()]
+
+        # with mara_db.postgresql.postgres_cursor_context(self.data_set.database_alias) as cursor:
+        #     cursor.execute(self.to_sql(limit=limit, offset=offset, include_personal_data=include_personal_data))
+        #     return cursor.fetchall()
+
+
+
+def quote_identifier(db: mara_db.dbs.DB, name: str):
+    """Quotes a column name or table name for the right dialect of the database"""
+    from mara_db import sqlalchemy_engine
+    engine = sqlalchemy_engine.engine(db)
+
+    return engine.dialect.identifier_preparer.quote(name)

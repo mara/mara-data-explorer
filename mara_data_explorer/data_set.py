@@ -3,31 +3,10 @@
 import mara_db.dbs
 import mara_db.postgresql
 from . import config
+from .column import Column, columns
 
+from functools import singledispatch
 
-class Column():
-    """Base class for different database column types"""
-
-    def __init__(self, column_name, type: str):
-        """
-        A column of a data set
-
-        Args:
-            column_name: the corresponding column_name in the database table
-            type: The type of the column
-        """
-        self.column_name = column_name
-        self.type = type
-
-    def sortable(self) -> bool:
-        """Whether the column is sortable"""
-        return self.type not in ['json', 'text[]']
-
-    def to_dict(self):
-        return {'column_name': self.column_name, 'type': self.type}
-
-    def __repr__(self):
-        return f'<{self.__class__.__name__} "{self.column_name}">'
 
 
 class DataSet():
@@ -68,32 +47,7 @@ class DataSet():
     def columns(self) -> {str: Column}:
         """Retrieves all columns of a data set from the database table"""
         if not self._columns:
-            with mara_db.postgresql.postgres_cursor_context(self.database_alias) as cursor:
-                cursor.execute(f"""
-SELECT
-  att.attname,
-  pg_catalog.format_type(atttypid, NULL) AS display_type
-FROM pg_attribute att
-  JOIN pg_class tbl ON tbl.oid = att.attrelid
-  JOIN pg_namespace ns ON tbl.relnamespace = ns.oid
-WHERE tbl.relname = {'%s'} AND ns.nspname = {'%s'} AND attnum > 0
-ORDER BY attnum""", (self.database_table, self.database_schema))
-                for column_name, column_type in cursor.fetchall():
-                    if column_type in ['character varying', 'text']:
-                        type = 'text'
-                    elif column_type in ['bigint', 'integer', 'real', 'smallint', 'double precision', 'numeric']:
-                        type = 'number'
-                    elif column_type in ['timestamp', 'timestamp with time zone', 'timestamp without time zone',
-                                         'time with time zone', 'time without time zone', 'date']:
-                        type = 'date'
-                    elif column_type in ['json', 'jsonb']:
-                        type = 'json'
-                    elif column_type == 'text[]':
-                        type = 'text[]'
-                    else:
-                        raise ValueError(
-                            f'Unimplemented column type "{column_type}" of "{self.database_alias}.{self.database_schema}.{self.database_table}.{column_name}"')
-                    self._columns[column_name] = Column(column_name, type)
+            self._columns = columns(self.database_alias, self.database_schema, self.database_table)
         return self._columns
 
     def autocomplete_text_column(self, column_name, term):
@@ -131,9 +85,7 @@ LIMIT 50""", (f'%{term}%',))
     def row_count(self):
         """Compute the total number of rows of the data set"""
         if self.columns:
-            with mara_db.postgresql.postgres_cursor_context(self.database_alias) as cursor:
-                cursor.execute(f'SELECT count(*) FROM "{self.database_schema}"."{self.database_table}"')
-                return cursor.fetchone()[0]
+            return row_count(self.database_alias, self.database_schema, self.database_table)
         else:
             return 0
 
@@ -145,3 +97,30 @@ def find_data_set(id: str) -> DataSet:
     """Returns a data set by its id"""
     for ds in config.data_sets():
         if ds.id == id: return ds
+
+
+@singledispatch
+def row_count(db: mara_db.dbs.DB, database_schema: str, database_table: str) -> int:
+    """Returns the total number of rows in a database table"""
+    raise NotImplementedError(f'Please implement row_count for type "{db.__class__.__name__}"')
+
+
+@row_count.register(str)
+def __(db: str, database_schema: str, database_table: str) -> [Column]:
+    """Extracts a list of column definitions from a database"""
+    return row_count(mara_db.dbs.db(db), database_schema, database_table)
+
+@row_count.register(mara_db.dbs.BigQueryDB)
+def __(db: mara_db.dbs.BigQueryDB, database_schema: str, database_table: str):
+    from mara_db.bigquery import bigquery_client
+
+    client = bigquery_client(db)
+    table = client.get_table(f'{database_schema}.{database_table}')
+
+    return table.num_rows
+
+
+    #
+    # with mara_db.postgresql.postgres_cursor_context(self.database_alias) as cursor:
+    #     cursor.execute(f'SELECT count(*) FROM "{self.database_schema}"."{self.database_table}"')
+    #     return cursor.fetchone()[0]
