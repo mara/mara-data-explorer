@@ -1,12 +1,8 @@
 """Representation and management of data sets"""
 
-import mara_db.dbs
-import mara_db.postgresql
 from . import config
 from .column import Column, columns
-
-from functools import singledispatch
-
+from .sql import execute_query, quote_identifier, row_count, quote_text_literal
 
 
 class DataSet():
@@ -52,35 +48,38 @@ class DataSet():
 
     def autocomplete_text_column(self, column_name, term):
         """Returns a list of values from `column` that contain `term` """
-        with mara_db.postgresql.postgres_cursor_context(self.database_alias) as cursor:
-            if self.columns[column_name].type == 'text[]':
-                cursor.execute(f"""
+        db = self.database_alias
+
+        if self.columns[column_name].type == 'text[]':
+            result = execute_query(self.database_alias, f"""
 SELECT f
-FROM (SELECT DISTINCT unnest("{column_name}") AS f FROM "{self.database_schema}"."{self.database_table}") t
-WHERE f ilike %s
+FROM (SELECT DISTINCT unnest({quote_identifier(db, column_name)}) AS f 
+FROM {quote_identifier(self.database_schema)}.{quote_identifier(self.database_table)}) t
+WHERE lower(f) LIKE concat('%', {quote_text_literal(db, term.lower())}, '%')
 ORDER BY f
-LIMIT 50""", (f'%{term}%',))
+LIMIT 50""")
 
-            elif self.use_attributes_table:
-                cursor.execute(f"""
+        elif self.use_attributes_table:
+            result = execute_query(self.database_alias, f"""
 SELECT value 
-FROM "{self.database_schema}"."{self.database_table}_attributes" 
-WHERE attribute = %s AND value ilike %s 
-LIMIT 50""", (column_name, f'%{term}%'))
+FROM {quote_identifier(db, self.database_schema)}.{quote_identifier(self.database_table + '_attributes')} 
+WHERE attribute = {quote_text_literal(column_name)} 
+      AND lower(value) LIKE concat('%', {quote_text_literal(db, term.lower())}, '%') 
+LIMIT 50""")
 
-            else:
-                cursor.execute(f"""
-SELECT DISTINCT "{column_name}" 
-FROM "{self.database_schema}"."{self.database_table}"
-WHERE "{column_name}" ILIKE %s AND "{column_name}" <> '' 
-ORDER BY "{column_name}"
-LIMIT 50""", (f'%{term}%',))
+        else:
+            result = execute_query(db, f"""
+SELECT DISTINCT {quote_identifier(db, column_name)} 
+FROM {quote_identifier(db, self.database_schema)}.{quote_identifier(db, self.database_table)}
+WHERE lower({quote_identifier(db, column_name)}) LIKE concat('%', {quote_text_literal(db, term.lower())}, '%') 
+     AND {quote_identifier(db, column_name)} <> '' 
+ORDER BY {quote_identifier(db, column_name)}
+LIMIT 50""")
 
-            result = cursor.fetchall()
-            if not result:
-                return ["\tNo match"]
-            else:
-                return [row[0] for row in result]
+        if not result:
+            return ["\tNo match"]
+        else:
+            return [row[0] for row in result]
 
     def row_count(self):
         """Compute the total number of rows of the data set"""
@@ -97,30 +96,3 @@ def find_data_set(id: str) -> DataSet:
     """Returns a data set by its id"""
     for ds in config.data_sets():
         if ds.id == id: return ds
-
-
-@singledispatch
-def row_count(db: mara_db.dbs.DB, database_schema: str, database_table: str) -> int:
-    """Returns the total number of rows in a database table"""
-    raise NotImplementedError(f'Please implement row_count for type "{db.__class__.__name__}"')
-
-
-@row_count.register(str)
-def __(db: str, database_schema: str, database_table: str) -> [Column]:
-    """Extracts a list of column definitions from a database"""
-    return row_count(mara_db.dbs.db(db), database_schema, database_table)
-
-@row_count.register(mara_db.dbs.BigQueryDB)
-def __(db: mara_db.dbs.BigQueryDB, database_schema: str, database_table: str):
-    from mara_db.bigquery import bigquery_client
-
-    client = bigquery_client(db)
-    table = client.get_table(f'{database_schema}.{database_table}')
-
-    return table.num_rows
-
-
-    #
-    # with mara_db.postgresql.postgres_cursor_context(self.database_alias) as cursor:
-    #     cursor.execute(f'SELECT count(*) FROM "{self.database_schema}"."{self.database_table}"')
-    #     return cursor.fetchone()[0]

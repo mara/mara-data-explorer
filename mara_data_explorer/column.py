@@ -69,7 +69,7 @@ ORDER BY attnum""", (database_table, database_schema))
                 type = 'text[]'
             else:
                 print(f'Unimplemented column type "{column_type}" of "{database_schema}.{database_table}.{column_name}"',
-                      sys.stderr)
+                      file=sys.stderr)
                 continue
             result[column_name] = Column(column_name, type)
         return result
@@ -94,7 +94,7 @@ def __(db: mara_db.dbs.BigQueryDB, database_schema, database_table):
             type = 'json'
         else:
             print(f'Unimplemented column type "{field.field_type}" of "{database_schema}.{database_table}.{field.name}"',
-                  sys.stderr)
+                  file=sys.stderr)
             continue
         result[field.name] = Column(field.name, type)
 

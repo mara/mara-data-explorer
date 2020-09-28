@@ -6,7 +6,6 @@ import json
 import math
 import re
 import subprocess
-from functools import singledispatch
 
 import sqlalchemy
 from sqlalchemy.ext.declarative import declarative_base
@@ -16,6 +15,7 @@ import mara_db.postgresql
 import mara_db.shell
 from mara_page import acl
 from .data_set import find_data_set
+from .sql import execute_query, quote_identifier, quote_text_literal
 
 Base = declarative_base()
 
@@ -83,8 +83,11 @@ class Query(Base):
 
         self.data_set_id = data_set_id
         self.query_id = re.sub(r'\W+', '-', query_id).lower() if query_id else ''
-        self.column_names = [column_name for column_name in self.data_set.default_column_names
-                             if column_name in self.data_set.columns]
+        self.column_names = column_names
+
+        if not self.column_names:
+            self.column_names = [column for column in self.data_set.default_column_names
+                                 if column in self.data_set.columns]
 
         if not self.column_names:
             self.column_names = list(self.data_set.columns.keys())
@@ -155,8 +158,10 @@ FROM {quote_identifier(db, self.data_set.database_schema)}.{quote_identifier(db,
         db = self.data_set.database_alias
         if type == 'text':
             if filter.operator == '~':
-                return f'{quote_identifier(db, filter.column_name)} ILIKE ANY(ARRAY[' \
-                       + ', '.join(f"'%{value}%'" for value in filter.value or ['']) + ']::TEXT[])'
+                clauses = [f"lower({quote_identifier(db, filter.column_name)}) LIKE concat('%', {quote_text_literal(db, value)}, '%')"
+                for value in filter.value or ['']]
+
+                return '(' + ' OR '.join(clauses) + ')'
             else:
                 return f'''{quote_identifier(db, filter.column_name)} {'IN' if filter.operator == '=' else 'NOT IN'} (''' \
                        + ', '.join(f"'{value}'" for value in filter.value or ['']) + ')'
@@ -169,7 +174,7 @@ FROM {quote_identifier(db, self.data_set.database_schema)}.{quote_identifier(db,
         elif type == 'number':
             return f'''{quote_identifier(db, filter.column_name)} {filter.operator} {filter.value}'''
         elif type == 'date':
-            return f'''{quote_identifier(db, filter.column_name)}"::Date {filter.operator} '{filter.value}' '''
+            return f'''{quote_identifier(db, filter.column_name)} {filter.operator} '{filter.value}' '''
         else:
             return '1=1'
 
@@ -183,11 +188,11 @@ FROM {quote_identifier(db, self.data_set.database_schema)}.{quote_identifier(db,
 ''')[0][0]
 
     def filter_row_count(self, filter_pos):
-        with mara_db.postgresql.postgres_cursor_context(self.data_set.database_alias) as cursor:
-            cursor.execute(
-                f'SELECT count(*) FROM "{self.data_set.database_schema}"."{self.data_set.database_table}" WHERE '
-                + self.filter_to_sql(self.filters[filter_pos]))
-            return cursor.fetchone()[0]
+        db = self.data_set.database_alias
+        return execute_query(db, f'''
+SELECT count(*) 
+FROM {quote_identifier(db, self.data_set.database_schema)}.{quote_identifier(db, self.data_set.database_table)} 
+WHERE ''' + self.filter_to_sql(self.filters[filter_pos]))
 
     def as_csv(self, delimiter, decimal_mark, include_personal_data):
         query = self.to_sql(decimal_mark=decimal_mark, include_personal_data=include_personal_data).replace('"', '\\"')
@@ -310,8 +315,8 @@ ORDER BY bucket
         db = self.data_set.database_alias
 
         (min_value, max_value) = execute_query(db, f"""
-SELECT min({quote_identifier(db, column_name)}) :: TIMESTAMPTZ AS min_value,
-       max({quote_identifier(db, column_name)}) :: TIMESTAMPTZ AS max_value
+SELECT min({quote_identifier(db, column_name)}) AS min_value,
+       max({quote_identifier(db, column_name)}) AS max_value
 FROM {quote_identifier(db, self.data_set.database_schema)}.{quote_identifier(db, self.data_set.database_table)}
 WHERE {quote_identifier(db, column_name)} IS NOT NULL
       {('AND ' + ' AND '.join([self.filter_to_sql(filter) for filter in self.filters])) if self.filters else ''}
@@ -319,45 +324,43 @@ WHERE {quote_identifier(db, column_name)} IS NOT NULL
         if min_value == None:
             return []
 
+        min_value = arrow.get(min_value)
+        max_value = arrow.get(max_value)
+
+        resolutions = {'year': '%Y',
+                       'month': '%Y %b',
+                       'week': '%Y - CW %U',
+                       'day': '%a, %d %b %Y'}
+
+        min_buckets = 5
+
+        for resolution in resolutions.keys():
+            if len(list(arrow.Arrow.range(resolution, min_value, max_value))) >= min_buckets:
+                break
+        print(min_value, max_value)
+        min_value = min_value.floor(resolution)
+        max_value = max_value.floor(resolution)
         print(min_value, max_value)
 
-        with mara_db.postgresql.postgres_cursor_context(self.data_set.database_alias) as cursor:
+        query = 'SELECT CASE '
+        for min_, _ in reversed(list(arrow.Arrow.span_range(resolution, min_value, max_value))):
+            query += f'''\n    WHEN {quote_identifier(db, column_name)} >= DATE '{min_.date()}' THEN DATE '{min_.date()}' '''
+        query += '\n  END as d,\n  CASE'
+        for min_, _ in reversed(list(arrow.Arrow.span_range(resolution, min_value, max_value))):
+            query += f'''\n    WHEN {quote_identifier(db, column_name)} >= DATE '{min_.date()}' THEN '{min_.strftime(resolutions[resolution])}' '''
 
-            with mara_db.postgresql.postgres_cursor_context(self.data_set.database_alias) as cursor:
-                cursor.execute(f"""
-SELECT min("{column_name}") :: TIMESTAMPTZ AS min_value,
-       max("{column_name}") :: TIMESTAMPTZ AS max_value
-FROM "{self.data_set.database_schema}"."{self.data_set.database_table}"
-WHERE "{column_name}" IS NOT NULL
+        query += f"""\n  END as label,\n  count(*) AS n
+FROM {quote_identifier(db, self.data_set.database_schema)}.{quote_identifier(db, self.data_set.database_table)}
+WHERE {quote_identifier(db, column_name)} IS NOT NULL
       {('AND ' + ' AND '.join([self.filter_to_sql(filter) for filter in self.filters])) if self.filters else ''}
-""")
-                (min_value, max_value) = cursor.fetchone()
-                if min_value == None:
-                    return []
-
-                resolutions = {'year': 'YYYY',
-                               'month': 'YYYY Mon',
-                               'week': 'IYYY "-" "CW "IW',
-                               'day': 'Dy, Mon DD YYYY'}
-
-                min_buckets = 5
-
-                for resolution in resolutions.keys():
-                    if len(list(arrow.Arrow.range(resolution, min_value, max_value))) >= min_buckets:
-                        break
-
-                # compute buckets (tuples of min and max values)
-                cursor.execute(f"""
-SELECT date_trunc('{resolution}', "{column_name}") as d,
-       to_char(date_trunc('{resolution}', "{column_name}"), '{resolutions[resolution]}'),
-       count(*) AS n
-FROM "{self.data_set.database_schema}"."{self.data_set.database_table}"
-WHERE "{column_name}" IS NOT NULL
-      {('AND ' + ' AND '.join([self.filter_to_sql(filter) for filter in self.filters])) if self.filters else ''}
-GROUP by d
+GROUP by d, label
 ORDER BY d
-""")
-                return cursor.fetchall()
+"""
+        print(query)
+        return execute_query(db, query)
+
+    #       to_char(date_trunc('{resolution}', {quote_identifier(db, column_name)}), '{resolutions[resolution]}'),
+    #       )
 
     def text_distribution(self, column_name):
         """Returns the most frequent values and their counts for a column"""
@@ -374,17 +377,16 @@ LIMIT 10''')
 
     def text_array_distribution(self, column_name):
         """Returns the most frequent values and their counts for a text array column"""
-        with mara_db.postgresql.postgres_cursor_context(self.data_set.database_alias) as cursor:
-            cursor.execute(f'''
-SELECT unnest("{column_name}") AS value,
+        db = self.data_set.database_alias
+        return execute_query(db, f'''
+SELECT unnest({quote_identifier(db, column_name)}) AS value,
        count(*) AS n
-FROM "{self.data_set.database_schema}"."{self.data_set.database_table}"
-WHERE "{column_name}" IS NOT NULL 
+FROM {quote_identifier(db, self.data_set.database_schema)}.{quote_identifier(db, self.data_set.database_table)}
+WHERE {quote_identifier(db, column_name)} IS NOT NULL 
       {('AND ' + ' AND '.join([self.filter_to_sql(filter) for filter in self.filters])) if self.filters else ''}
 GROUP BY value
 ORDER BY n DESC
 LIMIT 10''')
-            return cursor.fetchall()
 
     def save(self):
         """Saves a query in the database"""
@@ -460,35 +462,3 @@ WHERE data_set_id = {'%s'}
 ORDER BY updated_at DESC             
 ''', (data_set_id,))
         return cursor.fetchall()
-
-
-@singledispatch
-def execute_query(db: mara_db.dbs.DB, sql_statement: str) -> []:
-    """Execute an sql statement and return the result as an array"""
-    raise NotImplementedError(f'Please implement row_count for type "{db.__class__.__name__}"')
-
-
-@execute_query.register(str)
-def __(db: str, sql_statement: str):
-    return execute_query(mara_db.dbs.db(db), sql_statement)
-
-
-@execute_query.register(mara_db.dbs.BigQueryDB)
-def __(db: mara_db.dbs.BigQueryDB, sql_stament: str):
-    from mara_db.bigquery import bigquery_cursor_context
-
-    with bigquery_cursor_context(db) as cursor:
-        cursor.execute(sql_stament)
-        return [list(row) for row in cursor.fetchall()]
-
-        # with mara_db.postgresql.postgres_cursor_context(self.data_set.database_alias) as cursor:
-        #     cursor.execute(self.to_sql(limit=limit, offset=offset, include_personal_data=include_personal_data))
-        #     return cursor.fetchall()
-
-
-def quote_identifier(db: mara_db.dbs.DB, name: str):
-    """Quotes a column name or table name for the right dialect of the database"""
-    from mara_db import sqlalchemy_engine
-    engine = sqlalchemy_engine.engine(db)
-
-    return engine.dialect.identifier_preparer.quote(name)
