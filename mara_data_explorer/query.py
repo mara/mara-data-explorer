@@ -134,7 +134,7 @@ SELECT """ + ',\n       '.join(columns) + f"""
 FROM {quote_identifier(db, self.data_set.database_schema)}.{quote_identifier(db, self.data_set.database_table)}
 """ + self.filters_to_sql()
             if self.sort_order and self.sort_column_name:
-                sql += f'\nORDER BY {quote_identifier(db, self.sort_column_name)}" {self.sort_order} NULLS LAST\n';
+                sql += f'\nORDER BY {quote_identifier(db, self.sort_column_name)} {self.sort_order} NULLS LAST\n';
 
             if limit is not None:
                 sql += f'\nLIMIT {int(limit)}\n'
@@ -268,7 +268,8 @@ WHERE {quote_identifier(db, column_name)} IS NOT NULL
         min_buckets = 5
 
         # find the highest magnitude of 10
-        exponent = math.ceil(max(abs(min_value).log10(), abs(max_value).log10()))
+        exponent = math.ceil(max(abs(min_value).log10() if min_value != 0 else 0,
+                                 abs(max_value).log10() if max_value != 0 else 0))
 
         # when there is only a single value
         if min_value == max_value:
