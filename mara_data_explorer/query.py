@@ -1,11 +1,12 @@
 """Queries on data sets"""
 
+import csv
 import datetime
 import decimal
+import io
 import json
 import math
 import re
-import subprocess
 
 import sqlalchemy
 from sqlalchemy.ext.declarative import declarative_base
@@ -114,7 +115,7 @@ class Query(Base):
             return []
         return execute_query(
             self.data_set.database_alias,
-            self.to_sql(limit=limit, offset=offset, include_personal_data=include_personal_data))
+            self.to_sql(limit=limit, offset=offset, include_personal_data=include_personal_data))[0]
 
     def to_sql(self, limit=None, offset=None, decimal_mark: str = '.', include_personal_data: bool = True):
         db = self.data_set.database_alias
@@ -125,7 +126,7 @@ class Query(Base):
                     columns.append(f"{quote_identifier(db, '🔒')} AS {quote_identifier(db, column_name)}")
                 elif self.data_set.columns[column_name].type == 'number' and decimal_mark == ',':
                     columns.append(
-                        f'''REPLACE({quote_identifier(db, column_name)}::TEXT, '.', ',') AS {quote_identifier(db, column_name)}''')
+                        f'''REPLACE('' || {quote_identifier(db, column_name)}, '.', ',') AS {quote_identifier(db, column_name)}''')
                 else:
                     columns.append(quote_identifier(db, column_name))
 
@@ -158,8 +159,9 @@ FROM {quote_identifier(db, self.data_set.database_schema)}.{quote_identifier(db,
         db = self.data_set.database_alias
         if type == 'text':
             if filter.operator == '~':
-                clauses = [f"lower({quote_identifier(db, filter.column_name)}) LIKE concat('%', {quote_text_literal(db, value)}, '%')"
-                for value in filter.value or ['']]
+                clauses = [
+                    f"lower({quote_identifier(db, filter.column_name)}) LIKE concat('%', {quote_text_literal(db, value)}, '%')"
+                    for value in filter.value or ['']]
 
                 return '(' + ' OR '.join(clauses) + ')'
             else:
@@ -185,21 +187,25 @@ FROM {quote_identifier(db, self.data_set.database_schema)}.{quote_identifier(db,
 SELECT count(*) 
 FROM {quote_identifier(db, self.data_set.database_schema)}.{quote_identifier(db, self.data_set.database_table)}
 {self.filters_to_sql()}
-''')[0][0]
+''')[0][0][0]
 
     def filter_row_count(self, filter_pos):
         db = self.data_set.database_alias
         return execute_query(db, f'''
 SELECT count(*) 
 FROM {quote_identifier(db, self.data_set.database_schema)}.{quote_identifier(db, self.data_set.database_table)} 
-WHERE ''' + self.filter_to_sql(self.filters[filter_pos]))
+WHERE ''' + self.filter_to_sql(self.filters[filter_pos]))[0]
 
     def as_csv(self, delimiter, decimal_mark, include_personal_data):
         query = self.to_sql(decimal_mark=decimal_mark, include_personal_data=include_personal_data).replace('"', '\\"')
-        command = mara_db.shell.query_command(self.data_set.database_alias, echo_queries=False) \
-                  + f''' --command="COPY ({query}) TO STDOUT WITH DELIMITER E'{delimiter}' CSV HEADER;"'''
 
-        return subprocess.check_output(command, shell=True)
+        rows, column_names = execute_query(self.data_set.database_alias, query)
+
+        output = io.StringIO()
+        writer = csv.writer(output, dialect=csv.excel, quoting=csv.QUOTE_MINIMAL, delimiter=delimiter)
+        writer.writerow(column_names)
+        writer.writerows(rows)
+        return output.getvalue()
 
     def as_rows_for_google_sheet(self, array_format, header: bool = True, limit=None,
                                  include_personal_data: bool = True):
@@ -249,14 +255,14 @@ WHERE ''' + self.filter_to_sql(self.filters[filter_pos]))
         """Returns a frequency histogram for a number column"""
         db = self.data_set.database_alias
 
-        (min_value, max_value, number_of_values) = execute_query(db, f"""
+        (min_value, max_value, number_of_values) = execute_query(   db, f"""
 SELECT min({quote_identifier(db, column_name)}) AS min_value,
        max({quote_identifier(db, column_name)}) AS max_value,
        count(*)                        AS number_of_values
 FROM {quote_identifier(db, self.data_set.database_schema)}.{quote_identifier(db, self.data_set.database_table)}
 WHERE {quote_identifier(db, column_name)} IS NOT NULL
       {('AND ' + ' AND '.join([self.filter_to_sql(filter) for filter in self.filters])) if self.filters else ''}
-""")[0]
+""")[0][0]
 
         if min_value == None:
             return []
@@ -305,7 +311,7 @@ ORDER BY bucket
 '''
                 return ([(float((min_ + bucket) * pow(_10, exponent)),
                           float((min_ + bucket + 1) * pow(_10, exponent)),
-                          n) for bucket, n in execute_query(db, query)])
+                          n) for bucket, n in execute_query(db, query)[0]])
             else:
                 exponent += -1
 
@@ -321,7 +327,7 @@ SELECT min({quote_identifier(db, column_name)}) AS min_value,
 FROM {quote_identifier(db, self.data_set.database_schema)}.{quote_identifier(db, self.data_set.database_table)}
 WHERE {quote_identifier(db, column_name)} IS NOT NULL
       {('AND ' + ' AND '.join([self.filter_to_sql(filter) for filter in self.filters])) if self.filters else ''}
-""")[0]
+""")[0][0]
         if min_value == None:
             return []
 
@@ -338,10 +344,8 @@ WHERE {quote_identifier(db, column_name)} IS NOT NULL
         for resolution in resolutions.keys():
             if len(list(arrow.Arrow.range(resolution, min_value, max_value))) >= min_buckets:
                 break
-        print(min_value, max_value)
         min_value = min_value.floor(resolution)
         max_value = max_value.floor(resolution)
-        print(min_value, max_value)
 
         query = 'SELECT CASE '
         for min_, _ in reversed(list(arrow.Arrow.span_range(resolution, min_value, max_value))):
@@ -357,11 +361,8 @@ WHERE {quote_identifier(db, column_name)} IS NOT NULL
 GROUP by d, label
 ORDER BY d
 """
-        print(query)
-        return execute_query(db, query)
+        return execute_query(db, query)[0]
 
-    #       to_char(date_trunc('{resolution}', {quote_identifier(db, column_name)}), '{resolutions[resolution]}'),
-    #       )
 
     def text_distribution(self, column_name):
         """Returns the most frequent values and their counts for a column"""
@@ -374,7 +375,7 @@ WHERE {quote_identifier(db, column_name)} IS NOT NULL
       {('AND ' + ' AND '.join([self.filter_to_sql(filter) for filter in self.filters])) if self.filters else ''}
 GROUP BY value
 ORDER BY n DESC
-LIMIT 10''')
+LIMIT 10''')[0]
 
     def text_array_distribution(self, column_name):
         """Returns the most frequent values and their counts for a text array column"""
@@ -387,7 +388,7 @@ WHERE {quote_identifier(db, column_name)} IS NOT NULL
       {('AND ' + ' AND '.join([self.filter_to_sql(filter) for filter in self.filters])) if self.filters else ''}
 GROUP BY value
 ORDER BY n DESC
-LIMIT 10''')
+LIMIT 10''')[0]
 
     def save(self):
         """Saves a query in the database"""
