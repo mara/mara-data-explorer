@@ -90,7 +90,7 @@ ORDER BY attnum""", (self.database_table, self.database_schema))
                         type = 'json'
                     elif column_type == 'text[]':
                         type = 'text[]'
-					elif column_type == 'geometry':
+                    elif column_type == 'geometry':
                         type = 'geometry'
                     else:
                         raise ValueError(
