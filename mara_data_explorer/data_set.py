@@ -21,7 +21,7 @@ class Column():
 
     def sortable(self) -> bool:
         """Whether the column is sortable"""
-        return self.type not in ['json', 'text[]']
+        return self.type not in ['json', 'text[]','geometry']
 
     def to_dict(self):
         return {'column_name': self.column_name, 'type': self.type}
@@ -90,6 +90,8 @@ ORDER BY attnum""", (self.database_table, self.database_schema))
                         type = 'json'
                     elif column_type == 'text[]':
                         type = 'text[]'
+                    elif column_type == 'geometry':
+                        type = 'geometry'
                     else:
                         raise ValueError(
                             f'Unimplemented column type "{column_type}" of "{self.database_alias}.{self.database_schema}.{self.database_table}.{column_name}"')
