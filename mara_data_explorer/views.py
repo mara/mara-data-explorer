@@ -250,7 +250,7 @@ def _render_preview_row(query, row):
             values.append(acl.inline_permission_denied_message('Restricted personal data'))
         elif query.column_names[pos] in query.data_set.custom_column_renderers:
             values.append(query.data_set.custom_column_renderers[query.column_names[pos]](value))
-        elif not value:
+        elif value is None:
             values.append('')
         elif query.data_set.columns[query.column_names[pos]].type == 'text[]':
             values.append(_.ul[[_.li[_.span(class_='preview-value')[str(array_element)]] for array_element in value]])
